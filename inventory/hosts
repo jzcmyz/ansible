@@ -5,9 +5,10 @@
 192.168.1.70 # Win2019 dc-1
 
 [redhat]
-192.168.1.98 # rhel-8.3
-192.168.1.5 # podman-1
-192.168.1.6 # ansible-1
+rhel8-3		ansible_host=192.168.1.98
+#podman-1 	ansible_host=192.168.1.5
+ansible-1	ansible_host=192.168.1.6
+
 
 [windows:vars]
 ansible_user=Administrator
