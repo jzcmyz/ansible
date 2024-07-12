@@ -1,0 +1,19 @@
+---
+collections:
+- name: community.general
+  type: galaxy
+  
+- name: community.hashi_vault
+  type: galaxy
+
+- name: community.vmware
+  type: galaxy
+
+- name: ansible.posix
+  type: galaxy
+
+- name: ansible.windows
+  type: galaxy
+
+- name: fedora.linux_system_roles
+  type: galaxy

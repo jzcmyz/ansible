@@ -1,0 +1,15 @@
+collections:
+- name: ansible-posix-1.5.4.tar.gz
+  version: 1.5.4
+- name: ansible-windows-2.3.0.tar.gz
+  version: 2.3.0
+- name: community-hashi_vault-6.2.0.tar.gz
+  version: 6.2.0
+- name: community-vmware-4.2.0.tar.gz
+  version: 4.2.0
+- name: community-general-8.5.0.tar.gz
+  version: 8.5.0
+- name: fedora-linux_system_roles-1.76.2.tar.gz
+  version: 1.76.2
+- name: containers-podman-1.12.1.tar.gz
+  version: 1.12.1
