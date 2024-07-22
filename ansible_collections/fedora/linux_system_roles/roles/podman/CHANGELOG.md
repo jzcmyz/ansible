@@ -1,6 +1,40 @@
 Changelog
 =========
 
+[1.5.1] - 2024-06-11
+--------------------
+
+### Bug Fixes
+
+- fix: grab name of network to remove from quadlet file (#155)
+
+### Other Changes
+
+- ci: use tox-lsr 3.3.0 which uses ansible-test 2.17 (#151)
+- ci: tox-lsr 3.4.0 - fix py27 tests; move other checks to py310 (#153)
+- ci: Add supported_ansible_also to .ansible-lint (#154)
+
+[1.5.0] - 2024-04-22
+--------------------
+
+### New Features
+
+- feat: support registry_username and registry_password (#141)
+- feat: support podman_credential_files (#142)
+- feat: manage TLS cert/key files for registry connections and validate certs (#146)
+
+### Bug Fixes
+
+- fix: use correct user for cancel linger file name (#138)
+- fix: do not use become for changing hostdir ownership, and expose subuid/subgid info (#139)
+- fix: make kube cleanup idempotent (#144)
+
+### Other Changes
+
+- test: do not check for root linger (#140)
+- chore: change no_log false to true; fix comment (#143)
+- chore: use none in jinja code, not null (#145)
+
 [1.4.9] - 2024-04-04
 --------------------
 

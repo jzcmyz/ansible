@@ -1,11 +1,14 @@
 from __future__ import (absolute_import, division, print_function)
-import json
+import json  # noqa: F402
 
 from ansible.module_utils._text import to_bytes, to_native
 from ansible_collections.containers.podman.plugins.module_utils.podman.common import LooseVersion
 from ansible_collections.containers.podman.plugins.module_utils.podman.common import lower_keys
 from ansible_collections.containers.podman.plugins.module_utils.podman.common import generate_systemd
 from ansible_collections.containers.podman.plugins.module_utils.podman.common import delete_systemd
+from ansible_collections.containers.podman.plugins.module_utils.podman.common import diff_generic
+from ansible_collections.containers.podman.plugins.module_utils.podman.common import createcommand
+from ansible_collections.containers.podman.plugins.module_utils.podman.quadlet import create_quadlet_state, PodQuadlet
 
 
 __metaclass__ = type
@@ -23,12 +26,13 @@ ARGUMENTS_SPEC_POD = dict(
             'stopped',
             'paused',
             'unpaused',
+            'quadlet'
         ]),
     recreate=dict(type='bool', default=False),
     add_host=dict(type='list', required=False, elements='str'),
-    cgroup_parent=dict(type='str', required=False),
     blkio_weight=dict(type='str', required=False),
     blkio_weight_device=dict(type='list', elements='str', required=False),
+    cgroup_parent=dict(type='str', required=False),
     cpus=dict(type='str', required=False),
     cpuset_cpus=dict(type='str', required=False),
     cpuset_mems=dict(type='str', required=False),
@@ -37,10 +41,12 @@ ARGUMENTS_SPEC_POD = dict(
     device_read_bps=dict(type='list', elements='str', required=False),
     device_write_bps=dict(type='list', elements='str', required=False),
     dns=dict(type='list', elements='str', required=False),
-    dns_opt=dict(type='list', elements='str', required=False),
+    dns_opt=dict(type='list', elements='str', aliases=['dns_option'], required=False),
     dns_search=dict(type='list', elements='str', required=False),
+    exit_policy=dict(type='str', required=False, choices=['continue', 'stop']),
     generate_systemd=dict(type='dict', default={}),
     gidmap=dict(type='list', elements='str', required=False),
+    gpus=dict(type='str', required=False),
     hostname=dict(type='str', required=False),
     infra=dict(type='bool', required=False),
     infra_conmon_pidfile=dict(type='str', required=False),
@@ -48,6 +54,7 @@ ARGUMENTS_SPEC_POD = dict(
     infra_image=dict(type='str', required=False),
     infra_name=dict(type='str', required=False),
     ip=dict(type='str', required=False),
+    ip6=dict(type='str', required=False),
     label=dict(type='dict', required=False),
     label_file=dict(type='str', required=False),
     mac_address=dict(type='str', required=False),
@@ -62,13 +69,24 @@ ARGUMENTS_SPEC_POD = dict(
     pod_id_file=dict(type='str', required=False),
     publish=dict(type='list', required=False,
                  elements='str', aliases=['ports']),
+    quadlet_dir=dict(type='path'),
+    quadlet_filename=dict(type='str'),
+    quadlet_options=dict(type='list', elements='str'),
+    restart_policy=dict(type='str', required=False),
+    security_opt=dict(type='list', elements='str', required=False),
     share=dict(type='str', required=False),
+    share_parent=dict(type='bool', required=False),
+    shm_size=dict(type='str', required=False),
+    shm_size_systemd=dict(type='str', required=False),
     subgidname=dict(type='str', required=False),
     subuidname=dict(type='str', required=False),
+    sysctl=dict(type='dict', required=False),
     uidmap=dict(type='list', elements='str', required=False),
     userns=dict(type='str', required=False),
+    uts=dict(type='str', required=False),
     volume=dict(type='list', elements='str', aliases=['volumes'],
                 required=False),
+    volumes_from=dict(type='list', elements='str', required=False),
     executable=dict(type='str', required=False, default='podman'),
     debug=dict(type='bool', default=False),
 )
@@ -195,7 +213,7 @@ class PodmanPodModuleParams:
 
     def addparam_dns_opt(self, c):
         for g in self.params['dns_opt']:
-            c += ['--dns-opt', g]
+            c += ['--dns-option', g]
         return c
 
     def addparam_dns_search(self, c):
@@ -203,10 +221,16 @@ class PodmanPodModuleParams:
             c += ['--dns-search', g]
         return c
 
+    def addparam_exit_policy(self, c):
+        return c + ['--exit-policy=%s' % self.params['exit_policy']]
+
     def addparam_gidmap(self, c):
         for gidmap in self.params['gidmap']:
             c += ['--gidmap', gidmap]
         return c
+
+    def addparam_gpus(self, c):
+        return c + ['--gpus', self.params['gpus']]
 
     def addparam_hostname(self, c):
         return c + ['--hostname', self.params['hostname']]
@@ -230,6 +254,9 @@ class PodmanPodModuleParams:
 
     def addparam_ip(self, c):
         return c + ['--ip', self.params['ip']]
+
+    def addparam_ip6(self, c):
+        return c + ['--ip6', self.params['ip6']]
 
     def addparam_label(self, c):
         for label in self.params['label'].items():
@@ -280,14 +307,38 @@ class PodmanPodModuleParams:
             c += ['--publish', g]
         return c
 
+    def addparam_restart_policy(self, c):
+        return c + ['--restart=%s' % self.params['restart_policy']]
+
+    def addparam_security_opt(self, c):
+        for g in self.params['security_opt']:
+            c += ['--security-opt', g]
+        return c
+
     def addparam_share(self, c):
         return c + ['--share', self.params['share']]
+
+    def addparam_share_parent(self, c):
+        if self.params['share_parent'] is not None:
+            return c + ['--share-parent=%s' % self.params['share_parent']]
+        return c
+
+    def addparam_shm_size(self, c):
+        return c + ['--shm-size=%s' % self.params['shm_size']]
+
+    def addparam_shm_size_systemd(self, c):
+        return c + ['--shm-size-systemd=%s' % self.params['shm_size_systemd']]
 
     def addparam_subgidname(self, c):
         return c + ['--subgidname', self.params['subgidname']]
 
     def addparam_subuidname(self, c):
         return c + ['--subuidname', self.params['subuidname']]
+
+    def addparam_sysctl(self, c):
+        for k, v in self.params['sysctl'].items():
+            c += ['--sysctl', "%s=%s" % (k, v)]
+        return c
 
     def addparam_uidmap(self, c):
         for uidmap in self.params['uidmap']:
@@ -297,10 +348,18 @@ class PodmanPodModuleParams:
     def addparam_userns(self, c):
         return c + ['--userns', self.params['userns']]
 
+    def addparam_uts(self, c):
+        return c + ['--uts', self.params['uts']]
+
     def addparam_volume(self, c):
         for vol in self.params['volume']:
             if vol:
                 c += ['--volume', vol]
+        return c
+
+    def addparam_volumes_from(self, c):
+        for vol in self.params['volumes_from']:
+            c += ['--volumes-from', vol]
         return c
 
 
@@ -309,10 +368,6 @@ class PodmanPodDefaults:
         self.module = module
         self.version = podman_version
         self.defaults = {
-            'add_host': [],
-            'dns': [],
-            'dns_opt': [],
-            'dns_search': [],
             'infra': True,
             'label': {},
         }
@@ -356,50 +411,79 @@ class PodmanPodDiff:
             return True
         return False
 
+    def _diff_generic(self, module_arg, cmd_arg, boolean_type=False):
+        """
+        Generic diff function for module arguments from CreateCommand
+        in Podman inspection output.
+
+        Args:
+            module_arg (str): module argument name
+            cmd_arg (str): command line argument name
+            boolean_type (bool): if True, then argument is boolean type
+
+        Returns:
+            bool: True if there is a difference, False otherwise
+
+        """
+        info_config = self.info
+        before, after = diff_generic(self.params, info_config, module_arg, cmd_arg, boolean_type)
+        return self._diff_update_and_compare(module_arg, before, after)
+
     def diffparam_add_host(self):
-        if not self.infra_info:
-            return self._diff_update_and_compare('add_host', '', '')
-        before = self.infra_info['hostconfig']['extrahosts'] or []
-        after = self.params['add_host']
-        before, after = sorted(list(set(before))), sorted(list(set(after)))
-        return self._diff_update_and_compare('add_host', before, after)
+        return self._diff_generic('add_host', '--add-host')
+
+    def diffparam_blkio_weight(self):
+        return self._diff_generic('blkio_weight', '--blkio-weight')
+
+    def diffparam_blkio_weight_device(self):
+        return self._diff_generic('blkio_weight_device', '--blkio-weight-device')
 
     def diffparam_cgroup_parent(self):
-        before = (self.info.get('cgroupparent', '')
-                  or self.info.get('hostconfig', {}).get('cgroupparent', ''))
-        after = self.params['cgroup_parent'] or before
-        return self._diff_update_and_compare('cgroup_parent', before, after)
+        return self._diff_generic('cgroup_parent', '--cgroup-parent')
+
+    def diffparam_cpu_shares(self):
+        return self._diff_generic('cpu_shares', '--cpu-shares')
+
+    def diffparam_cpus(self):
+        return self._diff_generic('cpus', '--cpus')
+
+    def diffparam_cpuset_cpus(self):
+        return self._diff_generic('cpuset_cpus', '--cpuset-cpus')
+
+    def diffparam_cpuset_mems(self):
+        return self._diff_generic('cpuset_mems', '--cpuset-mems')
+
+    def diffparam_device(self):
+        return self._diff_generic('device', '--device')
+
+    def diffparam_device_read_bps(self):
+        return self._diff_generic('device_read_bps', '--device-read-bps')
+
+    def diffparam_device_write_bps(self):
+        return self._diff_generic('device_write_bps', '--device-write-bps')
 
     def diffparam_dns(self):
-        if not self.infra_info:
-            return self._diff_update_and_compare('dns', '', '')
-        before = self.infra_info['hostconfig']['dns'] or []
-        after = self.params['dns']
-        before, after = sorted(list(set(before))), sorted(list(set(after)))
-        return self._diff_update_and_compare('dns', before, after)
+        return self._diff_generic('dns', '--dns')
 
     def diffparam_dns_opt(self):
-        if not self.infra_info:
-            return self._diff_update_and_compare('dns_opt', '', '')
-        before = self.infra_info['hostconfig']['dnsoptions'] or []
-        after = self.params['dns_opt']
-        before, after = sorted(list(set(before))), sorted(list(set(after)))
-        return self._diff_update_and_compare('dns_opt', before, after)
+        return self._diff_generic('dns_opt', '--dns-option')
 
     def diffparam_dns_search(self):
-        if not self.infra_info:
-            return self._diff_update_and_compare('dns_search', '', '')
-        before = self.infra_info['hostconfig']['dnssearch'] or []
-        after = self.params['dns_search']
-        before, after = sorted(list(set(before))), sorted(list(set(after)))
-        return self._diff_update_and_compare('dns_search', before, after)
+        return self._diff_generic('dns_search', '--dns-search')
+
+    # Disabling idemotency check for exit policy as it's added by systemd generator
+    # https://github.com/containers/ansible-podman-collections/issues/774
+    # def diffparam_exit_policy(self):
+    #     return self._diff_generic('exit_policy', '--exit-policy')
+
+    def diffparam_gidmap(self):
+        return self._diff_generic('gidmap', '--gidmap')
+
+    def diffparam_gpus(self):
+        return self._diff_generic('gpus', '--gpus')
 
     def diffparam_hostname(self):
-        if not self.infra_info:
-            return self._diff_update_and_compare('hostname', '', '')
-        before = self.infra_info['config']['hostname']
-        after = self.params['hostname'] or before
-        return self._diff_update_and_compare('hostname', before, after)
+        return self._diff_generic('hostname', '--hostname')
 
     # TODO(sshnaidm): https://github.com/containers/podman/issues/6968
     def diffparam_infra(self):
@@ -411,30 +495,25 @@ class PodmanPodDiff:
         after = self.params['infra']
         return self._diff_update_and_compare('infra', before, after)
 
-    # TODO(sshnaidm): https://github.com/containers/podman/issues/6969
-    # def diffparam_infra_command(self):
-    #     before = str(self.info['hostconfig']['infra_command'])
-    #     after = self.params['infra_command']
-    #     return self._diff_update_and_compare('infra_command', before, after)
+    def diffparam_infra_command(self):
+        return self._diff_generic('infra_command', '--infra-command')
+
+    # Disabling idemotency check for infra_conmon_pidfile as it's added by systemd generator
+    # https://github.com/containers/ansible-podman-collections/issues/774
+    # def diffparam_infra_conmon_pidfile(self):
+    #     return self._diff_generic('infra_conmon_pidfile', '--infra-conmon-pidfile')
 
     def diffparam_infra_image(self):
-        if not self.infra_info:
-            return self._diff_update_and_compare('infra_image', '', '')
-        before = str(self.infra_info['imagename'])
-        after = before
-        if self.module_params['infra_image']:
-            after = self.params['infra_image']
-        before = before.replace(":latest", "")
-        after = after.replace(":latest", "")
-        before = before.split("/")[-1]  # pylint: disable=W,C,R
-        after = after.split("/")[-1]  # pylint: disable=W,C,R
-        return self._diff_update_and_compare('infra_image', before, after)
+        return self._diff_generic('infra_image', '--infra-image')
 
-    # TODO(sshnaidm): https://github.com/containers/podman/pull/6956
-    # def diffparam_ip(self):
-    #     before = str(self.info['hostconfig']['ip'])
-    #     after = self.params['ip']
-    #     return self._diff_update_and_compare('ip', before, after)
+    def diffparam_infra_name(self):
+        return self._diff_generic('infra_name', '--infra-name')
+
+    def diffparam_ip(self):
+        return self._diff_generic('ip', '--ip')
+
+    def diffparam_ip6(self):
+        return self._diff_generic('ip6', '--ip6')
 
     def diffparam_label(self):
         if 'config' in self.info and 'labels' in self.info['config']:
@@ -449,129 +528,101 @@ class PodmanPodDiff:
             before.pop('podman_systemd_unit', None)
         return self._diff_update_and_compare('label', before, after)
 
-    # TODO(sshnaidm): https://github.com/containers/podman/pull/6956
-    # def diffparam_mac_address(self):
-    #     before = str(self.info['hostconfig']['mac_address'])
-    #     after = self.params['mac_address']
-    #     return self._diff_update_and_compare('mac_address', before, after)
+    def diffparam_label_file(self):
+        return self._diff_generic('label_file', '--label-file')
+
+    def diffparam_mac_address(self):
+        return self._diff_generic('mac_address', '--mac-address')
+
+    def diffparam_memory(self):
+        return self._diff_generic('memory', '--memory')
+
+    def diffparam_memory_swap(self):
+        return self._diff_generic('memory_swap', '--memory-swap')
 
     def diffparam_network(self):
-        if not self.infra_info:
-            return self._diff_update_and_compare('network', [], [])
-        net_mode_before = self.infra_info['hostconfig']['networkmode']
-        net_mode_after = ''
-        before = list(self.infra_info['networksettings'].get('networks', {}))
-        # Remove default 'podman' network in v3 for comparison
-        if before == ['podman']:
-            before = []
-        after = self.params['network'] or []
-        after = [i.lower() for i in after]
-        # Special case for options for slirp4netns rootless networking from v2
-        if net_mode_before == 'slirp4netns' and 'createcommand' in self.info:
-            cr_com = self.info['createcommand']
-            if '--network' in cr_com:
-                cr_net = cr_com[cr_com.index('--network') + 1].lower()
-                if 'slirp4netns:' in cr_net:
-                    before = [cr_net]
-        if net_mode_before == 'pasta' and 'createcommand' in self.info:
-            cr_com = self.info['createcommand']
-            if '--network' in cr_com:
-                cr_net = cr_com[cr_com.index('--network') + 1].lower()
-                if 'pasta:' in cr_net:
-                    before = [cr_net]
-        # Currently supported only 'host' and 'none' network modes idempotency
-        if after in [['bridge'], ['host'], ['slirp4netns'], ['pasta']]:
-            net_mode_after = after[0]
+        return self._diff_generic('network', '--network')
 
-        if net_mode_after and not before:
-            # Remove differences between v1 and v2
-            net_mode_after = net_mode_after.replace('bridge', 'default')
-            net_mode_after = net_mode_after.replace('slirp4netns', 'default')
-            net_mode_after = net_mode_after.replace('pasta', 'default')
-            net_mode_before = net_mode_before.replace('bridge', 'default')
-            net_mode_before = net_mode_before.replace('slirp4netns', 'default')
-            net_mode_before = net_mode_before.replace('pasta', 'default')
-            return self._diff_update_and_compare('network', net_mode_before, net_mode_after)
-        # For 4.4.0+ podman versions with no network specified
-        if not net_mode_after and net_mode_before == 'slirp4netns' and not after:
-            net_mode_after = 'slirp4netns'
-            if before == ['slirp4netns']:
-                after = ['slirp4netns']
-        if not net_mode_after and net_mode_before == 'bridge' and not after:
-            net_mode_after = 'bridge'
-            if before == ['bridge']:
-                after = ['bridge']
-        # For pasta networking for Podman v5
-        if not net_mode_after and net_mode_before == 'pasta' and not after:
-            net_mode_after = 'pasta'
-            if before == ['pasta']:
-                after = ['pasta']
-        before, after = sorted(list(set(before))), sorted(list(set(after)))
-        return self._diff_update_and_compare('network', before, after)
+    def diffparam_network_alias(self):
+        return self._diff_generic('network_alias', '--network-alias')
 
-    # TODO(sshnaidm)
-    # def diffparam_no_hosts(self):
-    #     before = str(self.info['hostconfig']['no_hosts'])
-    #     after = self.params['no_hosts']
-    #     return self._diff_update_and_compare('no_hosts', before, after)
+    def diffparam_no_hosts(self):
+        return self._diff_generic('no_hosts', '--no-hosts', boolean_type=True)
 
-    # TODO(sshnaidm) Need to add port ranges support
+    def diffparam_pid(self):
+        return self._diff_generic('pid', '--pid')
+
+    # Disabling idemotency check for pod id file as it's added by systemd generator
+    # https://github.com/containers/ansible-podman-collections/issues/774
+    # def diffparam_pod_id_file(self):
+    #     return self._diff_generic('pod_id_file', '--pod-id-file')
+
     def diffparam_publish(self):
-        def compose(p, h):
-            s = ":".join(
-                [str(h["hostport"]), p.replace('/tcp', '')]
-            ).strip(":")
-            if h['hostip'] == '0.0.0.0' and LooseVersion(self.version) >= LooseVersion('5.0.0'):
-                return s
-            if h['hostip']:
-                return ":".join([h['hostip'], s])
-            return s
+        return self._diff_generic('publish', '--publish')
 
-        if not self.infra_info:
-            return self._diff_update_and_compare('publish', '', '')
+    def diffparam_restart_policy(self):
+        return self._diff_generic('restart_policy', '--restart')
 
-        ports = self.infra_info['hostconfig']['portbindings']
-        before = []
-        for port, hosts in ports.items():
-            if hosts:
-                for h in hosts:
-                    before.append(compose(port, h))
-        after = self.params['publish'] or []
-        after = [
-            i.replace("/tcp", "").replace("[", "").replace("]", "")
-            for i in after]
-        # No support for port ranges yet
-        for ports in after:
-            if "-" in ports:
-                return self._diff_update_and_compare('publish', '', '')
-        before, after = sorted(list(set(before))), sorted(list(set(after)))
-        return self._diff_update_and_compare('publish', before, after)
+    def diffparam_security_opt(self):
+        return self._diff_generic('security_opt', '--security-opt')
 
     def diffparam_share(self):
-        if not self.infra_info:
-            return self._diff_update_and_compare('share', '', '')
-        if 'sharednamespaces' in self.info:
-            before = self.info['sharednamespaces']
-        elif 'config' in self.info:
-            before = [
-                i.split('shares')[1].lower()
-                for i in self.info['config'] if 'shares' in i]
-            # TODO(sshnaidm): to discover why in podman v1 'cgroup' appears
-            before.remove('cgroup')
-        else:
-            before = []
-        if self.params['share'] is not None:
-            after = self.params['share'].split(",")
-        else:
-            after = ['uts', 'ipc', 'net']
-            # TODO: find out why on Ubuntu the 'net' is not present
-            if 'net' not in before:
-                after.remove('net')
-        if self.params["uidmap"] or self.params["gidmap"] or self.params["userns"]:
-            after.append('user')
+        return self._diff_generic('share', '--share')
 
-        before, after = sorted(list(set(before))), sorted(list(set(after)))
-        return self._diff_update_and_compare('share', before, after)
+    def diffparam_share_parent(self):
+        return self._diff_generic('share_parent', '--share-parent')
+
+    def diffparam_shm_size(self):
+        return self._diff_generic('shm_size', '--shm-size')
+
+    def diffparam_shm_size_systemd(self):
+        return self._diff_generic('shm_size_systemd', '--shm-size-systemd')
+
+    def diffparam_subgidname(self):
+        return self._diff_generic('subgidname', '--subgidname')
+
+    def diffparam_subuidname(self):
+        return self._diff_generic('subuidname', '--subuidname')
+
+    def diffparam_sysctl(self):
+        return self._diff_generic('sysctl', '--sysctl')
+
+    def diffparam_uidmap(self):
+        return self._diff_generic('uidmap', '--uidmap')
+
+    def diffparam_userns(self):
+        return self._diff_generic('userns', '--userns')
+
+    def diffparam_uts(self):
+        return self._diff_generic('uts', '--uts')
+
+    def diffparam_volume(self):
+        def clean_volume(x):
+            '''Remove trailing and double slashes from volumes.'''
+            if not x.rstrip("/"):
+                return "/"
+            return x.replace("//", "/").rstrip("/")
+
+        before = createcommand('--volume', self.info)
+        if before == []:
+            before = None
+        after = self.params['volume']
+        if after is not None:
+            after = [":".join(
+                [clean_volume(i) for i in v.split(":")[:2]]) for v in self.params['volume']]
+        if before is not None:
+            before = [":".join([clean_volume(i) for i in v.split(":")[:2]]) for v in before]
+        self.module.log("PODMAN Before: %s and After: %s" % (before, after))
+        if before is None and after is None:
+            return self._diff_update_and_compare('volume', before, after)
+        if after is not None:
+            after = ",".join(sorted([str(i).lower() for i in after]))
+            if before:
+                before = ",".join(sorted([str(i).lower() for i in before]))
+        return self._diff_update_and_compare('volume', before, after)
+
+    def diffparam_volumes_from(self):
+        return self._diff_generic('volumes_from', '--volumes-from')
 
     def is_different(self):
         diff_func_list = [func for func in dir(self)
@@ -839,6 +890,9 @@ class PodmanPodManager:
             else:
                 self.results['diff']['before'] += sysd['diff']['before']
                 self.results['diff']['after'] += sysd['diff']['after']
+        quadlet = PodQuadlet(self.module_params)
+        quadlet_content = quadlet.create_quadlet_content()
+        self.results.update({'podman_quadlet': quadlet_content})
 
     def execute(self):
         """Execute the desired action according to map of actions & states."""
@@ -851,7 +905,7 @@ class PodmanPodManager:
             'killed': self.make_killed,
             'paused': self.make_paused,
             'unpaused': self.make_unpaused,
-
+            'quadlet': self.make_quadlet,
         }
         process_action = states_map[self.state]
         process_action()
@@ -953,3 +1007,7 @@ class PodmanPodManager:
             self.results.update({'changed': True})
         self.results.update({'pod': {},
                              'podman_actions': self.pod.actions})
+
+    def make_quadlet(self):
+        results_update = create_quadlet_state(self.module, "pod")
+        self.results.update(results_update)

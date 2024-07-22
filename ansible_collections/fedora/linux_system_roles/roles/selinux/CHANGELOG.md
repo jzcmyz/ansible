@@ -1,6 +1,26 @@
 Changelog
 =========
 
+[1.7.7] - 2024-07-02
+--------------------
+
+### Bug Fixes
+
+- fix: add support for EL10 (#239)
+
+### Other Changes
+
+- ci: ansible-lint action now requires absolute directory (#238)
+
+[1.7.6] - 2024-06-11
+--------------------
+
+### Other Changes
+
+- ci: use tox-lsr 3.3.0 which uses ansible-test 2.17 (#233)
+- ci: tox-lsr 3.4.0 - fix py27 tests; move other checks to py310 (#235)
+- ci: Add supported_ansible_also to .ansible-lint (#236)
+
 [1.7.5] - 2024-04-04
 --------------------
 

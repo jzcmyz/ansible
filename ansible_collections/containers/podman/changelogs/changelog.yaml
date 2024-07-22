@@ -282,6 +282,80 @@ releases:
       - podman_pod_info - handle return being list in Podman 5 (#713)
       release_summary: Support for Podman v5 and bugfixes
     release_date: '2024-04-08'
+  1.13.0:
+    changes:
+      bugfixes:
+      - Fix pod info for non-existant pods
+      major_changes:
+      - Add quadlet support for Podman modules
+      release_summary: Quadlet support for Podman
+    release_date: '2024-04-22'
+  1.14.0:
+    changes:
+      bugfixes:
+      - Fix idempotency for pod with 0.0.0.0
+      - Fix transports issues in podman_image
+      - fix(#747) set correct HealthCmd
+      major_changes:
+      - Add mount and unmount for volumes
+      - Add multiple subnets for networks
+      - Add new options for podman_container
+      - Add new options to pod module
+      - Improve idempotency for networking in podman_container
+      - Redesign idempotency for Podman Pod module
+      minor_changes:
+      - Add autodiscovery for build context in podman_image
+      - Add docs, tests and more examples for podman_pod
+      - Add extra_args for podman_image push and pull
+      - Add idempotency for mounts and volumes in podman_container
+      - Add new functionality tests for podman_secret
+      - Add path and env options for podman_secret
+      - Add route, dns and ipam_driver to podman_network
+      - Create podman secret when skip_existing=True and it does not exist
+      release_summary: Idempotency redesign and a lot of new options
+    release_date: '2024-05-30'
+  1.15.0:
+    changes:
+      bugfixes:
+      - Fix issue with pushing podman image to repo name and org
+      major_changes:
+      - Add podman search
+      release_summary: Podman search module and bugfixes for Podman image
+    modules:
+    - description: Search for remote images using podman
+      name: podman_search
+      namespace: ''
+    release_date: '2024-06-03'
+  1.15.1:
+    changes:
+      bugfixes:
+      - Fix idempotency for pods in case of systemd generation
+      - Fix idempotency for systemd generations
+      release_summary: Bugfixes for systemd generation
+    release_date: '2024-06-07'
+  1.15.2:
+    changes:
+      minor_changes:
+      - Add option for inline Containerfile in podman_image
+      release_summary: Inline Containerfile option for podman_image
+    release_date: '2024-06-11'
+  1.15.3:
+    changes:
+      bugfixes:
+      - Fix idempotency for empty values
+      - params gpus should be exit_policy
+      minor_changes:
+      - CI Update python for latest Ansible to 3.11 in CI
+      release_summary: Bugfixes
+    release_date: '2024-06-20'
+  1.15.4:
+    changes:
+      bugfixes:
+      - Fix missing entries in network quadlet generated file
+      - Fix quadlet parameters for restart policy
+      - Idempotency improvements
+      release_summary: Bugfixes
+    release_date: '2024-07-12'
   1.2.0:
     changes:
       minor_changes:

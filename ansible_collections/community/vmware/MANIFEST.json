@@ -2,7 +2,7 @@
  "collection_info": {
   "namespace": "community",
   "name": "vmware",
-  "version": "4.2.0",
+  "version": "4.5.0",
   "authors": [
    "Ansible (https://github.com/ansible)"
   ],
@@ -28,7 +28,7 @@
   "name": "FILES.json",
   "ftype": "file",
   "chksum_type": "sha256",
-  "chksum_sha256": "1ef7fbdfa909824b3ed7734c6a79135d82971bdff522b1ddd9c3cb4844c21d9a",
+  "chksum_sha256": "62705ff29f5199b3e301b3198320a9324c9a1e3c19185203306fb4e1d9bbe6d8",
   "format": 1
  },
  "format": 1

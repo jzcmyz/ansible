@@ -1,6 +1,38 @@
 Changelog
 =========
 
+[1.3.0] - 2024-07-02
+--------------------
+
+### New Features
+
+- feat: Allow initrd configuration to be skipped (#165)
+
+### Bug Fixes
+
+- fix: add support for EL10 (#166)
+
+### Other Changes
+
+- test: some files not created by nm implementation (#164)
+- ci: ansible-lint action now requires absolute directory (#167)
+
+[1.2.20] - 2024-06-11
+--------------------
+
+### Other Changes
+
+- ci: use tox-lsr 3.3.0 which uses ansible-test 2.17 (#159)
+- ci: tox-lsr 3.4.0 - fix py27 tests; move other checks to py310 (#161)
+- ci: Add supported_ansible_also to .ansible-lint (#162)
+
+[1.2.19] - 2024-04-22
+--------------------
+
+### Other Changes
+
+- refactor: clear net config from initrd via NM config (#156)
+
 [1.2.18] - 2024-04-04
 --------------------
 

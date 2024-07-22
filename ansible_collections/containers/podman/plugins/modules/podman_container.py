@@ -55,6 +55,8 @@ options:
         If container doesn't exist, the module creates it and leaves it in
         'created' state. If configuration doesn't match or 'recreate' option is
         set, the container will be recreated
+      - I(quadlet) - Write a quadlet file with the specified configuration.
+        Requires the C(quadlet_dir) option to be set.
     type: str
     default: started
     choices:
@@ -63,6 +65,7 @@ options:
       - stopped
       - started
       - created
+      - quadlet
   image:
     description:
       - Repository path (or image name) and tag used to create the container.
@@ -76,6 +79,11 @@ options:
       - Add an annotation to the container. The format is key value, multiple
         times.
     type: dict
+  arch:
+    description:
+      - Set the architecture for the container.
+        Override the architecture, defaults to hosts, of the image to be pulled. For example, arm.
+    type: str
   attach:
     description:
       - Attach to STDIN, STDOUT or STDERR. The default in Podman is false.
@@ -122,6 +130,10 @@ options:
         the cgroups path of the init process. Cgroups will be created if they
         do not already exist.
     type: path
+  cgroup_conf:
+    description:
+      - When running on cgroup v2, specify the cgroup file to write to and its value.
+    type: dict
   cgroupns:
     description:
       - Path to cgroups under which the cgroup for the container will be
@@ -133,6 +145,10 @@ options:
         Valid values are enabled and disabled, which the default being enabled.
         The disabled option will force the container to not create CGroups,
         and thus conflicts with CGroup options cgroupns and cgroup-parent.
+    type: str
+  chrootdirs:
+    description:
+      - Path to a directory inside the container that is treated as a chroot directory.
     type: str
   cidfile:
     description:
@@ -193,6 +209,10 @@ options:
       - Memory nodes (MEMs) in which to allow execution (0-3, 0,1). Only
         effective on NUMA systems.
     type: str
+  decryption_key:
+    description:
+      - The "key-passphrase" to be used for decryption of images. Key can point to keys and/or certificates.
+    type: str
   delete_depend:
     description:
       - Remove selected container and recursively remove all containers that depend on it.
@@ -231,6 +251,12 @@ options:
         (e.g. device /dev/sdc:/dev/xvdc:rwm)
     type: list
     elements: str
+  device_cgroup_rule:
+    description:
+      - Add a rule to the cgroup allowed devices list.
+        The rule is expected to be in the format specified in the Linux kernel
+        documentation admin-guide/cgroup-v1/devices.
+    type: str
   device_read_bps:
     description:
       - Limit read rate (bytes per second) from a device
@@ -304,6 +330,10 @@ options:
       - Use all current host environment variables in container.
         Defaults to false.
     type: bool
+  env_merge:
+    description:
+      - Preprocess default environment variables for the containers
+    type: dict
   etc_hosts:
     description:
       - Dict of host-to-IP mappings, where each host name is a key in the
@@ -433,6 +463,10 @@ options:
       - Run the container in a new user namespace using the supplied mapping.
     type: list
     elements: str
+  gpus:
+    description:
+      - GPU devices to add to the container.
+    type: str
   group_add:
     description:
       - Add additional groups to run as
@@ -440,26 +474,61 @@ options:
     elements: str
     aliases:
       - groups
+  group_entry:
+    description:
+      - Customize the entry that is written to the /etc/group file within the container when --user is used.
+    type: str
   healthcheck:
     description:
       - Set or alter a healthcheck command for a container.
     type: str
+    aliases:
+      - health_cmd
   healthcheck_interval:
     description:
       - Set an interval for the healthchecks
         (a value of disable results in no automatic timer setup)
         (default "30s")
     type: str
+    aliases:
+      - health_interval
   healthcheck_retries:
     description:
       - The number of retries allowed before a healthcheck is considered to be
         unhealthy. The default value is 3.
     type: int
+    aliases:
+      - health_retries
   healthcheck_start_period:
     description:
       - The initialization time needed for a container to bootstrap.
         The value can be expressed in time format like 2m3s. The default value
         is 0s
+    type: str
+    aliases:
+      - health_start_period
+  health_startup_cmd:
+    description:
+      - Set a startup healthcheck command for a container.
+    type: str
+  health_startup_interval:
+    description:
+      - Set an interval for the startup healthcheck.
+    type: str
+  health_startup_retries:
+    description:
+      - The number of attempts allowed before the startup healthcheck restarts the container.
+        If set to 0, the container is never restarted. The default is 0.
+    type: int
+  health_startup_success:
+    description:
+      - The number of successful runs required before the startup healthcheck succeeds
+        and the regular healthcheck begins. A value of 0 means that any success begins the regular healthcheck.
+        The default is 0.
+    type: int
+  health_startup_timeout:
+    description:
+      - The maximum time a startup healthcheck command has to complete before it is marked as failed.
     type: str
   healthcheck_timeout:
     description:
@@ -467,6 +536,8 @@ options:
         is considered failed. Like start-period, the value can be expressed in
         a time format such as 1m22s. The default value is 30s
     type: str
+    aliases:
+      - health_timeout
   healthcheck_failure_action:
     description:
       - The action to be taken when the container is considered unhealthy. The action must be one of
@@ -478,6 +549,8 @@ options:
       - 'kill'
       - 'restart'
       - 'stop'
+    aliases:
+      - health_on_failure
   hooks_dir:
     description:
       - Each .json file in the path configures a hook for Podman containers.
@@ -489,6 +562,11 @@ options:
     description:
       - Container host name. Sets the container host name that is available
         inside the container.
+    type: str
+  hostuser:
+    description:
+      - Add a user account to /etc/passwd from the host to the container.
+        The Username or UID must exist on the host system.
     type: str
   http_proxy:
     description:
@@ -519,6 +597,14 @@ options:
       - Run an init inside the container that forwards signals and reaps
         processes. The default is false.
     type: bool
+  init_ctr:
+    description:
+      - (Pods only). When using pods, create an init style container,
+        which is run after the infra container is started but before regular pod containers are started.
+    type: str
+    choices:
+      - 'once'
+      - 'always'
   init_path:
     description:
       - Path to the container-init binary.
@@ -538,6 +624,10 @@ options:
         network namespace via 'network container:<name|id>'.
         The address must be within the default CNI network's pool
         (default 10.88.0.0/16).
+    type: str
+  ip6:
+    description:
+      - Specify a static IPv6 address for the container
     type: str
   ipc:
     description:
@@ -668,6 +758,12 @@ options:
         This is a limitation that will be removed in a later release.
     type: list
     elements: str
+    aliases:
+      - network_alias
+  no_healthcheck:
+    description:
+      - Disable any defined healthchecks for container.
+    type: bool
   no_hosts:
     description:
       - Do not create /etc/hosts for the container
@@ -682,22 +778,63 @@ options:
     description:
       - Tune the host's OOM preferences for containers (accepts -1000 to 1000)
     type: int
+  os:
+    description:
+      - Override the OS, defaults to hosts, of the image to be pulled. For example, windows.
+    type: str
+  passwd:
+    description:
+      - Allow Podman to add entries to /etc/passwd and /etc/group when used in conjunction with the --user option.
+        This is used to override the Podman provided user setup in favor of entrypoint configurations
+        such as libnss-extrausers.
+    type: bool
+  passwd_entry:
+    description:
+      - Customize the entry that is written to the /etc/passwd file within the container when --passwd is used.
+    type: str
+  personality:
+    description:
+      - Personality sets the execution domain via Linux personality(2).
+    type: str
   pid:
     description:
       - Set the PID mode for the container
     type: str
     aliases:
       - pid_mode
+  pid_file:
+    description:
+      - When the pidfile location is specified, the container process' PID is written to the pidfile.
+    type: path
   pids_limit:
     description:
       - Tune the container's PIDs limit. Set -1 to have unlimited PIDs for the
         container.
+    type: str
+  platform:
+    description:
+      - Specify the platform for selecting the image.
     type: str
   pod:
     description:
       - Run container in an existing pod.
         If you want podman to make the pod for you, prefix the pod name
         with "new:"
+    type: str
+  pod_id_file:
+    description:
+      - Run container in an existing pod and read the pod's ID from the specified file.
+        When a container is run within a pod which has an infra-container,
+        the infra-container starts first.
+    type: path
+  preserve_fd:
+    description:
+      - Pass down to the process the additional file descriptors specified in the comma separated list.
+    type: list
+    elements: str
+  preserve_fds:
+    description:
+      - Pass down to the process N additional file descriptors (in addition to 0, 1, 2). The total FDs are 3\+N.
     type: str
   privileged:
     description:
@@ -721,6 +858,35 @@ options:
       - Publish all exposed ports to random ports on the host interfaces. The
         default is false.
     type: bool
+  pull:
+    description:
+      - Pull image policy. The default is 'missing'.
+    type: str
+    choices:
+      - 'missing'
+      - 'always'
+      - 'never'
+      - 'newer'
+  quadlet_dir:
+    description:
+      - Path to the directory to write quadlet file in.
+        By default, it will be set as C(/etc/containers/systemd/) for root user,
+        C(~/.config/containers/systemd/) for non-root users.
+    type: path
+  quadlet_filename:
+    description:
+      - Name of quadlet file to write. By default it takes C(name) value.
+    type: str
+  quadlet_options:
+    description:
+      - Options for the quadlet file. Provide missing in usual container args
+        options as a list of lines to add.
+    type: list
+    elements: str
+  rdt_class:
+    description:
+      - Rdt-class sets the class of service (CLOS or COS) for the container to run in. Requires root.
+    type: str
   read_only:
     description:
       - Mount the container's root filesystem as read only. Default is false
@@ -760,6 +926,15 @@ options:
       - Seconds to wait before forcibly stopping the container when restarting. Use -1 for infinite wait.
         Applies to "restarted" status.
     type: str
+  retry:
+    description:
+      - Number of times to retry pulling or pushing images between the registry and local storage in case of failure.
+        Default is 3.
+    type: int
+  retry_delay:
+    description:
+      - Duration of delay between retry attempts when pulling or pushing images between the registry and local storage in case of failure.
+    type: str
   rm:
     description:
       - Automatically remove the container when it exits. The default is false.
@@ -767,6 +942,11 @@ options:
     aliases:
       - remove
       - auto_remove
+  rmi:
+    description:
+      - After exit of the container, remove the image unless another container is using it.
+        Implies --rm on the new container. The default is false.
+    type: bool
   rootfs:
     description:
       - If true, the first argument refers to an exploded container on the file
@@ -784,6 +964,10 @@ options:
         L(documentation,https://docs.podman.io/en/latest/markdown/podman-run.1.html#secret-secret-opt-opt) for more details.
     type: list
     elements: str
+  seccomp_policy:
+    description:
+      - Specify the policy to select the seccomp profile.
+    type: str
   security_opt:
     description:
       - Security Options. For example security_opt "seccomp=unconfined"
@@ -797,6 +981,10 @@ options:
         g (gigabytes).
         If you omit the unit, the system uses bytes. If you omit the size
         entirely, the system uses 64m
+    type: str
+  shm_size_systemd:
+    description:
+      - Size of systemd-specific tmpfs mounts such as /run, /run/lock, /var/log/journal and /tmp.
     type: str
   sig_proxy:
     description:
@@ -834,6 +1022,11 @@ options:
     description:
       - Run container in systemd mode. The default is true.
     type: str
+  timeout:
+    description:
+      - Maximum time (in seconds) a container is allowed to run before conmon sends it the kill signal.
+        By default containers run until they exit or are stopped by "podman stop".
+    type: int
   timezone:
     description:
       - Set timezone in container. This flag takes area-based timezones,
@@ -842,6 +1035,10 @@ options:
         See /usr/share/zoneinfo/ for valid timezones.
         Remote connections use local containers.conf for defaults.
     type: str
+  tls_verify:
+    description:
+      - Require HTTPS and verify certificates when pulling images.
+    type: bool
   tmpfs:
     description:
       - Create a tmpfs mount. For example tmpfs
@@ -863,6 +1060,20 @@ options:
     elements: str
     aliases:
       - ulimits
+  umask:
+    description:
+      - Set the umask inside the container. Defaults to 0022.
+        Remote connections use local containers.conf for defaults.
+    type: str
+  unsetenv:
+    description:
+      - Unset default environment variables for the container.
+    type: list
+    elements: str
+  unsetenv_all:
+    description:
+      - Unset all default environment variables for the container.
+    type: bool
   user:
     description:
       - Sets the username or UID used and optionally the groupname or GID for
@@ -879,6 +1090,10 @@ options:
   uts:
     description:
       - Set the UTS mode for the container
+    type: str
+  variant:
+    description:
+      - Use VARIANT instead of the default architecture variant of the container image.
     type: str
   volume:
     description:
@@ -994,6 +1209,23 @@ EXAMPLES = r"""
       - --deploy-hook
       - "echo 1 > /var/lib/letsencrypt/complete"
 
+- name: Create a Quadlet file
+  containers.podman.podman_container:
+    name: quadlet-container
+    image: nginx
+    state: quadlet
+    quadlet_filename: custome-container
+    device: "/dev/sda:/dev/xvda:rwm"
+    ports:
+      - "8080:80"
+    volumes:
+      - "/var/www:/usr/share/nginx/html"
+    quadlet_options:
+      - "AutoUpdate=registry"
+      - "Pull=true"
+      - |
+        [Install]
+        WantedBy=default.target
 """
 
 RETURN = r"""

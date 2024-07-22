@@ -312,7 +312,14 @@ configuration is supported at the moment.
 #### `type: vlan`
 
 Similar to `controller`, the `parent` references the connection profile in the ansible
-role.
+role. The vlan ID can be specified by using nested vlan setting, the valid vlan ID
+value ranges from 0 to 4094. Here is how to specify the vlan ID:
+
+```yaml
+type: vlan
+vlan:
+  id: 6
+```
 
 #### `type: macvlan`
 
@@ -1344,6 +1351,13 @@ network_state:
 The `network` role rejects invalid configurations. It is recommended to test the role
 with `--check` first. There is no protection against wrong (but valid) configuration.
 Double-check your configuration before applying it.
+
+### network_connections Internal Module
+
+The `network_connections` internal module is intended for internal use or integration
+testing and is not intended for direct external access or use. When this internal
+module is utilized in integration tests, the tasks specified in `tasks/main.yaml`
+are skipped, thereby speeding up the test execution.
 
 ## Compatibility
 

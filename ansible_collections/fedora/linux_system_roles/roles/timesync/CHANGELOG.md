@@ -1,6 +1,27 @@
 Changelog
 =========
 
+[1.8.5] - 2024-07-02
+--------------------
+
+### Bug Fixes
+
+- fix: add support for EL10 (#245)
+- fix: Don't use chrony-dhcp sourcedir on EL8 systems (#246)
+
+### Other Changes
+
+- ci: ansible-lint action now requires absolute directory (#244)
+
+[1.8.4] - 2024-06-11
+--------------------
+
+### Other Changes
+
+- ci: use tox-lsr 3.3.0 which uses ansible-test 2.17 (#239)
+- ci: tox-lsr 3.4.0 - fix py27 tests; move other checks to py310 (#241)
+- ci: Add supported_ansible_also to .ansible-lint (#242)
+
 [1.8.3] - 2024-04-04
 --------------------
 

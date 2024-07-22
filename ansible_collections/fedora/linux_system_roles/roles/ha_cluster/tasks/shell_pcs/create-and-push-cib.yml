@@ -36,7 +36,7 @@
     dest: "{{ item }}"
     owner: root
     group: root
-    mode: 0600
+    mode: "0600"
   loop:
     - "{{ __ha_cluster_tempfile_cib_xml.path }}"
     - "{{ __ha_cluster_tempfile_original_cib_xml.path }}"
@@ -95,6 +95,16 @@
     - name: Configure node attributes
       include_tasks: pcs-node-attributes.yml
       loop: "{{ ha_cluster_node_options | selectattr('attributes', 'defined') | list }}"
+      loop_control:
+        loop_var: node_options
+
+  ## Node utilization
+    - name: Configure node utilization
+      include_tasks: pcs-node-utilization.yml
+      loop: >-
+        {{
+          ha_cluster_node_options | selectattr('utilization', 'defined') | list
+        }}
       loop_control:
         loop_var: node_options
 
@@ -257,7 +267,7 @@
     dest: "{{ __ha_cluster_tempfile_cib_diff.path }}"
     owner: root
     group: root
-    mode: 0600
+    mode: "0600"
   check_mode: false
   changed_when: not ansible_check_mode
   when: __ha_cluster_cib_diff.rc == 1

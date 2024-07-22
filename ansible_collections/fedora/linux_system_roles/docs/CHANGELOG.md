@@ -1,6 +1,155 @@
 Changelog
 =========
 
+[1.83.1] - 2024-07-17
+---------------------
+
+### Bug Fixes
+
+- network - fix: network_state must be defined in defaults/main.yml (#702)
+
+[1.83.0] - 2024-07-15
+---------------------
+
+### New Features
+
+- firewall - feat: Handle reboot for transactional update systems (#226)
+- postfix - feat: Added postfix_files feature as a simple means to add extra files/maps to config (#129)
+- snapshot - feat: rewrite snapshot.py as an Ansible module / add support for thin origins (#58)
+- systemd - feat: add support for transactional update (#53)
+
+### Bug Fixes
+
+- metrics - fix: add support for EL10 (#200)
+- metrics - fix: add configuration files for c10s and el10 (#199)
+- postfix - fix: add support for EL10 (#134)
+- snapshot - fix: add support for EL10 (#66)
+
+[1.82.0] - 2024-07-02
+---------------------
+
+### New Features
+
+- ha_cluster - feat: crmsh corosync jinja2 template rework (#212)
+- nbde_client - feat: Allow initrd configuration to be skipped (#165)
+
+### Bug Fixes
+
+- ad_integration - fix: add support for EL10 (#102)
+- bootloader - fix: add support for EL10 (#109)
+- certificate - fix: add support for EL10 (#229)
+- cockpit - fix: add support for EL10 (#163)
+- cockpit - fix: wildcard package installation not working with dnf module (#161)
+- crypto_policies - fix: add support for EL10 (#118)
+- fapolicyd - fix: add support for EL10 (#28)
+- firewall - fix: add support for EL10 (#224)
+- gfs2 - fix: add support for EL10 (#17)
+- journald - fix: add support for EL10 (#73)
+- kdump - fix: add support for EL10 (#206)
+- kdump - fix: el10 kdump role should depend on kdump-utils (#204)
+- kernel_settings - fix: add support for EL10 (#207)
+- keylime_server - fix: add support for EL10 (#46)
+- logging - fix: add support for EL10 (#395)
+- nbde_client - fix: add support for EL10 (#166)
+- nbde_server - fix: add support for EL10 (#150)
+- network - fix: add support for EL10 (#700)
+- postgresql - fix: add support for EL10 (#93)
+- rhc - fix: add support for EL10 (#184)
+- selinux - fix: add support for EL10 (#239)
+- ssh - fix: add support for EL10 (#149)
+- storage - fix: add support for EL10 (#452)
+- sudo - fix: add support for EL10 (#12)
+- systemd - fix: add support for EL10 (#51)
+- timesync - fix: Don't use chrony-dhcp sourcedir on EL8 systems (#246)
+- timesync - fix: add support for EL10 (#245)
+- tlog - fix: add support for EL10 (#133)
+- vpn - fix: add support for EL10 (#160)
+
+[1.81.0] - 2024-06-24
+---------------------
+
+### New Features
+
+- sudo - New Role
+
+[1.80.0] - 2024-06-22
+---------------------
+
+### New Features
+
+- sshd - feat:  Ubuntu Noble support (#290)
+
+### Bug Fixes
+
+- sshd - fix: Ubuntu 22.04 PrintMotd set default to false (#290)
+
+[1.79.0] - 2024-06-12
+---------------------
+
+### New Features
+
+- ssh - feat: Add new configuration options and remove false positives in the test (#142)
+- storage - feat: Stratis support (#439)
+- storage - feat: PV resize support (#438)
+
+### Bug Fixes
+
+- bootloader - fix: Set user.cfg path to /boot/grub2/ on EL 9 UEFI (#101)
+- logging - fix: Add check for "rsyslogd: error" in /var/log/messages in all tests (#388)
+- podman - fix: grab name of network to remove from quadlet file (#155)
+- postfix - fix: Reflect smtp-submission service rename in EL 10 and Fedora 40+ (#131)
+- storage - fix: Fix expected error message in tests_misc.yml (#446)
+- storage - fix: Get same sector size disks for multi device LVM tests (#441)
+- storage - fix: Fix 'possibly-used-before-assignment' pylint issues (#440)
+
+[1.78.2] - 2024-05-22
+---------------------
+
+### Bug Fixes
+
+- logging - fix: Remove name="basics_imuxsock" parameter from imuxsock type input (#385)
+
+[1.78.1] - 2024-04-26
+---------------------
+
+### Other Changes
+
+- no user-visible changes
+
+[1.78.0] - 2024-04-25
+---------------------
+
+### New Features
+
+- gfs2 - New Role
+
+[1.77.0] - 2024-04-23
+---------------------
+
+### New Features
+
+- ha_cluster - feat: Add support for utilization (#202)
+- ha_cluster - feat: crmsh enhancements, master slave, validations (#197)
+- podman - feat: manage TLS cert/key files for registry connections and validate certs (#146)
+- podman - feat: support podman_credential_files (#142)
+- podman - feat: support registry_username and registry_password (#141)
+
+### Bug Fixes
+
+- bootloader - fix: Fail on the s390x architecture with a not supported msg (#96)
+- ha_cluster - fix: make consistent approach for multiple node attributes sets (#201)
+- podman - fix: make kube cleanup idempotent (#144)
+- podman - fix: do not use become for changing hostdir ownership, and expose subuid/subgid info (#139)
+- podman - fix: use correct user for cancel linger file name (#138)
+- storage - fix: Fix recreate check for formats without labelling support (#435)
+
+[1.76.2] - 2024-04-13
+---------------------
+
+### Other Changes
+
+- no user-visible changes
+
 [1.76.1] - 2024-04-07
 ---------------------
 
@@ -29,13 +178,6 @@ Changelog
 
 ### Bug Fixes
 
-- rhc - a line `ansible_host=` to be put in the config file.
-  
-  The former is a job of `{state: absent}`. An empty string should not cause such a desctructive operation. The latter is ignored by the Client and is equivatent to that line missing.
-  
-  Result:
-  Consistently with a similar condition of the display_name parameter, an empty string ansible_host is treated as undefined. It's the same behavior as with a null value.
-- rhc - the Ansible host name to be reset in the Inventory by `insights-client --ansible_host=`;
 - rhc - fix: Ignore ansible_host: "" (#169)
 
 [1.75.3] - 2024-03-15

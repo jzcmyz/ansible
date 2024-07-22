@@ -26,6 +26,44 @@
   assert:
     that: test1 is not changed
 
+- name: Run container with empty vars for list and dict
+  containers.podman.podman_container:
+    executable: "{{ test_executable | default('podman') }}"
+    image: "{{ idem_image }}"
+    name: idempotency
+    state: present
+    env: {}
+    publish: []
+    command: 1h
+  register: test_to_empty
+
+- name: Run container with empty vars for list and dict - again
+  containers.podman.podman_container:
+    executable: "{{ test_executable | default('podman') }}"
+    image: "{{ idem_image }}"
+    name: idempotency
+    state: present
+    env: {}
+    publish: []
+    command: 1h
+  register: test_empty
+
+- name: Run container again w/o empty vars
+  containers.podman.podman_container:
+    executable: "{{ test_executable | default('podman') }}"
+    image: "{{ idem_image }}"
+    name: idempotency
+    state: present
+    command: 1h
+  register: test_from_empty
+
+- name: Check info when running container again
+  assert:
+    that:
+      - test_to_empty is not changed
+      - test_empty is not changed
+      - test_from_empty is not changed
+
 - name: Run container with environment vars
   containers.podman.podman_container:
     executable: "{{ test_executable | default('podman') }}"
@@ -162,10 +200,9 @@
     command: 1h
   register: test14
 
-# We can't guess the default log path
 - name: Check info with default log opt path
   assert:
-    that: test14 is not changed
+    that: test14 is changed
 
 - name: Run container with all log-opts
   containers.podman.podman_container:
@@ -238,8 +275,8 @@
     that:
       - test15 is changed
       - test16 is not changed
-      - test17 is not changed
-      - test18 is not changed
+      - test17 is changed
+      - test18 is changed
       - test19 is changed
 
 - name: Run container with etc_hosts
@@ -381,7 +418,70 @@
 
 - name: Check info of second container with PID of container ID again
   assert:
-    that: test29 is not changed
+    that: test29 is changed
+
+- name: Run container with complex command
+  containers.podman.podman_container:
+    executable: "{{ test_executable | default('podman') }}"
+    name: idempotency2
+    image: alpine
+    command:
+      - sh
+      - -c
+      - read
+      - -p
+      - 8012
+    interactive: true
+    tty: true
+    device:
+      - /dev/fuse
+  register: test30
+
+- name: Run container with complex command again
+  containers.podman.podman_container:
+    executable: "{{ test_executable | default('podman') }}"
+    name: idempotency2
+    image: alpine
+    command:
+      - sh
+      - -c
+      - read
+      - -p
+      - 8012
+    interactive: true
+    tty: true
+    device:
+      - /dev/fuse
+  register: test31
+
+- name: Run container with different complex command
+  containers.podman.podman_container:
+    executable: "{{ test_executable | default('podman') }}"
+    name: idempotency2
+    image: alpine
+    command:
+      - sh
+      - -c
+      - read
+      - -p
+      - 8015
+    interactive: true
+    tty: true
+    device:
+      - /dev/fuse
+  register: test32
+
+- name: Check info of container with complex command
+  assert:
+    that: test30 is changed
+
+- name: Check info of container with complex command again
+  assert:
+    that: test31 is not changed
+
+- name: Check info of container with complex command
+  assert:
+    that: test32 is changed
 
 - name: Remove dependent test container
   containers.podman.podman_container:

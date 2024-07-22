@@ -42,6 +42,10 @@ DOCUMENTATION = r'''
       description: Whether or not to pull the image.
       default: True
       type: bool
+    pull_extra_args:
+      description:
+        - Extra arguments to pass to the pull command.
+      type: str
     push:
       description: Whether or not to push an image.
       default: False
@@ -64,9 +68,11 @@ DOCUMENTATION = r'''
         - present
         - absent
         - build
+        - quadlet
     validate_certs:
       description:
-        - Require HTTPS and validate certificates when pulling or pushing. Also used during build if a pull or push is necessary.
+        - Require HTTPS and validate certificates when pulling or pushing.
+          Also used during build if a pull or push is necessary.
       type: bool
       aliases:
         - tlsverify
@@ -93,9 +99,15 @@ DOCUMENTATION = r'''
         - build_args
         - buildargs
       suboptions:
+        container_file:
+          description:
+            - Content of the Containerfile to use for building the image.
+              Mutually exclusive with the C(file) option which is path to the existing Containerfile.
+          type: str
         file:
           description:
             - Path to the Containerfile if it is not in the build context directory.
+              Mutually exclusive with the C(container_file) option.
           type: path
         volume:
           description:
@@ -104,7 +116,8 @@ DOCUMENTATION = r'''
           elements: str
         annotation:
           description:
-            - Dictionary of key=value pairs to add to the image. Only works with OCI images. Ignored for Docker containers.
+            - Dictionary of key=value pairs to add to the image. Only works with OCI images.
+              Ignored for Docker containers.
           type: dict
         force_rm:
           description:
@@ -147,7 +160,7 @@ DOCUMENTATION = r'''
           type: bool
         format:
           description:
-            - Manifest type to use when pushing an image using the 'dir' transport (default is manifest type of source).
+            - Manifest type to use when pushing an image using the 'dir' transport (default is manifest type of source)
           type: str
           choices:
             - oci
@@ -167,14 +180,37 @@ DOCUMENTATION = r'''
             - destination
         transport:
           description:
-            - Transport to use when pushing in image. If no transport is set, will attempt to push to a remote registry.
+            - Transport to use when pushing in image. If no transport is set, will attempt to push to a remote registry
           type: str
           choices:
             - dir
+            - docker
             - docker-archive
             - docker-daemon
             - oci-archive
             - ostree
+        extra_args:
+          description:
+            - Extra args to pass to push, if executed. Does not idempotently check for new push args.
+          type: str
+    quadlet_dir:
+      description:
+        - Path to the directory to write quadlet file in.
+          By default, it will be set as C(/etc/containers/systemd/) for root user,
+          C(~/.config/containers/systemd/) for non-root users.
+      type: path
+      required: false
+    quadlet_filename:
+      description:
+        - Name of quadlet file to write. By default it takes image name without prefixes and tags.
+      type: str
+    quadlet_options:
+      description:
+        - Options for the quadlet file. Provide missing in usual network args
+          options as a list of lines to add.
+      type: list
+      elements: str
+      required: false
 '''
 
 EXAMPLES = r"""
@@ -280,6 +316,27 @@ EXAMPLES = r"""
   containers.podman.podman_image:
     name: nginx
     arch: amd64
+
+- name: Build a container from file inline
+  containers.podman.podman_image:
+    name: mycustom_image
+    state: build
+    build:
+      container_file: |-
+        FROM alpine:latest
+        CMD echo "Hello, World!"
+
+- name: Create a quadlet file for an image
+  containers.podman.podman_image:
+    name: docker.io/library/alpine:latest
+    state: quadlet
+    quadlet_dir: /etc/containers/systemd
+    quadlet_filename: alpine-latest
+    quadlet_options:
+      - Variant=arm/v7
+      - |
+        [Install]
+        WantedBy=default.target
 """
 
 RETURN = r"""
@@ -302,7 +359,7 @@ RETURN = r"""
             "/app-entrypoint.sh"
           ],
           "Env": [
-            "PATH=/opt/bitnami/java/bin:/opt/bitnami/wildfly/bin:/opt/bitnami/nami/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            "PATH=/opt/bitnami/java/bin:/opt/bitnami/wildfly/bin:/opt/bitnami/nami/bin:...",
             "IMAGE_OS=debian-9",
             "NAMI_VERSION=1.0.0-1",
             "GPG_KEY_SERVERS_LIST=ha.pool.sks-keyservers.net",
@@ -342,10 +399,10 @@ RETURN = r"""
         "Digest": "sha256:5a8ab28e314c2222de3feaf6dac94a0436a37fc08979d2722c99d2bef2619a9b",
         "GraphDriver": {
           "Data": {
-            "LowerDir": "/var/lib/containers/storage/overlay/142c1beadf1bb09fbd929465ec98c9dca3256638220450efb4214727d0d0680e/diff:/var/lib/containers/s",
-            "MergedDir": "/var/lib/containers/storage/overlay/9aa10191f5bddb59e28508e721fdeb43505e5b395845fa99723ed787878dbfea/merged",
-            "UpperDir": "/var/lib/containers/storage/overlay/9aa10191f5bddb59e28508e721fdeb43505e5b395845fa99723ed787878dbfea/diff",
-            "WorkDir": "/var/lib/containers/storage/overlay/9aa10191f5bddb59e28508e721fdeb43505e5b395845fa99723ed787878dbfea/work"
+            "LowerDir": "/var/lib/containers/storage/overlay/142c1beadf1bb09fbd929465e..../diff:/var/lib/containers/s",
+            "MergedDir": "/var/lib/containers/storage/overlay/9aa10191f5bddb59e28508e721fdeb43505e5b395845fa99/merged",
+            "UpperDir": "/var/lib/containers/storage/overlay/9aa10191f5bddb59e28508e721fdeb43505e5b395845fa99/diff",
+            "WorkDir": "/var/lib/containers/storage/overlay/9aa10191f5bddb59e28508e721fdeb43505e5b395845fa99/work"
           },
           "Name": "overlay"
         },
@@ -403,13 +460,17 @@ RETURN = r"""
     ]
 """
 
-import json
-import re
-import shlex
+import json  # noqa: E402
+import os  # noqa: E402
+import re  # noqa: E402
+import shlex  # noqa: E402
+import tempfile  # noqa: E402
+import time  # noqa: E402
 
 from ansible.module_utils._text import to_native
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.containers.podman.plugins.module_utils.podman.common import run_podman_command
+from ansible_collections.containers.podman.plugins.module_utils.podman.quadlet import create_quadlet_state
 
 
 class PodmanImageManager(object):
@@ -424,6 +485,7 @@ class PodmanImageManager(object):
         self.executable = self.module.get_bin_path(module.params.get('executable'), required=True)
         self.tag = self.module.params.get('tag')
         self.pull = self.module.params.get('pull')
+        self.pull_extra_args = self.module.params.get('pull_extra_args')
         self.push = self.module.params.get('push')
         self.path = self.module.params.get('path')
         self.force = self.module.params.get('force')
@@ -451,6 +513,9 @@ class PodmanImageManager(object):
         if self.state in ['absent']:
             self.absent()
 
+        if self.state == 'quadlet':
+            self.make_quadlet()
+
     def _run(self, args, expected_rc=0, ignore_errors=False):
         cmd = " ".join([self.executable]
                        + [to_native(i) for i in args])
@@ -474,7 +539,7 @@ class PodmanImageManager(object):
         if not layer_ids:
             layer_ids = lines.splitlines()
 
-        return (layer_ids[-1])
+        return layer_ids[-1]
 
     def present(self):
         image = self.find_image()
@@ -485,9 +550,18 @@ class PodmanImageManager(object):
             digest_before = None
 
         if not image or self.force:
-            if self.path:
+            if self.state == 'build' or self.path:
                 # Build the image
-                self.results['actions'].append('Built image {image_name} from {path}'.format(image_name=self.image_name, path=self.path))
+                build_file = self.build.get('file') if self.build else None
+                container_file_txt = self.build.get('container_file') if self.build else None
+                if build_file and container_file_txt:
+                    self.module.fail_json(msg='Cannot specify both build file and container file content!')
+                if not self.path and build_file:
+                    self.path = os.path.dirname(build_file)
+                elif not self.path and not build_file and not container_file_txt:
+                    self.module.fail_json(msg='Path to build context or file is required when building an image')
+                self.results['actions'].append('Built image {image_name} from {path}'.format(
+                    image_name=self.image_name, path=self.path or 'default context'))
                 if not self.module.check_mode:
                     self.results['image'], self.results['stdout'] = self.build_image()
                     image = self.results['image']
@@ -506,16 +580,8 @@ class PodmanImageManager(object):
                 self.results['changed'] = True
 
         if self.push:
-            # Push the image
-            if '/' in self.image_name:
-                push_format_string = 'Pushed image {image_name}'
-            else:
-                push_format_string = 'Pushed image {image_name} to {dest}'
-            self.results['actions'].append(push_format_string.format(image_name=self.image_name, dest=self.push_args['dest']))
-            self.results['changed'] = True
-            if not self.module.check_mode:
-                self.results['image'], output = self.push_image()
-                self.results['stdout'] += "\n" + output
+            self.results['image'], output = self.push_image()
+            self.results['stdout'] += "\n" + output
         if image and not self.results.get('image'):
             self.results['image'] = image
 
@@ -536,6 +602,11 @@ class PodmanImageManager(object):
             self.results['image']['state'] = 'Deleted'
             if not self.module.check_mode:
                 self.remove_image_id()
+
+    def make_quadlet(self):
+        results_update = create_quadlet_state(self.module, "image")
+        self.results.update(results_update)
+        self.module.exit_json(**self.results)
 
     def find_image(self, image_name=None):
         if image_name is None:
@@ -614,13 +685,18 @@ class PodmanImageManager(object):
         if self.ca_cert_dir:
             args.extend(['--cert-dir', self.ca_cert_dir])
 
+        if self.pull_extra_args:
+            args.extend(shlex.split(self.pull_extra_args))
+
         rc, out, err = self._run(args, ignore_errors=True)
         if rc != 0:
             if not self.pull:
-                self.module.fail_json(msg='Failed to find image {image_name} locally, image pull set to {pull_bool}'.format(
-                    pull_bool=self.pull, image_name=image_name))
+                self.module.fail_json(
+                    msg='Failed to find image {image_name} locally, image pull set to {pull_bool}'.format(
+                        pull_bool=self.pull, image_name=image_name))
             else:
-                self.module.fail_json(msg='Failed to pull image {image_name}'.format(image_name=image_name))
+                self.module.fail_json(
+                    msg='Failed to pull image {image_name}'.format(image_name=image_name))
         return self.inspect_image(out.strip())
 
     def build_image(self):
@@ -657,6 +733,17 @@ class PodmanImageManager(object):
         containerfile = self.build.get('file')
         if containerfile:
             args.extend(['--file', containerfile])
+        container_file_txt = self.build.get('container_file')
+        if container_file_txt:
+            # create a temporarly file with the content of the Containerfile
+            if self.path:
+                container_file_path = os.path.join(self.path, 'Containerfile.generated_by_ansible_%s' % time.time())
+            else:
+                container_file_path = os.path.join(
+                    tempfile.gettempdir(), 'Containerfile.generated_by_ansible_%s' % time.time())
+            with open(container_file_path, 'w') as f:
+                f.write(container_file_txt)
+            args.extend(['--file', container_file_path])
 
         volume = self.build.get('volume')
         if volume:
@@ -677,13 +764,16 @@ class PodmanImageManager(object):
         target = self.build.get('target')
         if target:
             args.extend(['--target', target])
-
-        args.append(self.path)
+        if self.path:
+            args.append(self.path)
 
         rc, out, err = self._run(args, ignore_errors=True)
         if rc != 0:
-            self.module.fail_json(msg="Failed to build image {image}: {out} {err}".format(image=self.image_name, out=out, err=err))
-
+            self.module.fail_json(msg="Failed to build image {image}: {out} {err}".format(
+                image=self.image_name, out=out, err=err))
+        # remove the temporary file if it was created
+        if container_file_txt:
+            os.remove(container_file_path)
         last_id = self._get_id_from_output(out, startswith='-->')
         return self.inspect_image(last_id), out + err
 
@@ -720,49 +810,54 @@ class PodmanImageManager(object):
         if sign_by_key:
             args.extend(['--sign-by', sign_by_key])
 
+        push_extra_args = self.push_args.get('extra_args')
+        if push_extra_args:
+            args.extend(shlex.split(push_extra_args))
+
         args.append(self.image_name)
 
         # Build the destination argument
         dest = self.push_args.get('dest')
-        dest_format_string = '{dest}/{image_name}'
-        regexp = re.compile(r'/{name}(:{tag})?'.format(name=self.name, tag=self.tag))
-        if not dest:
-            if '/' not in self.name:
-                self.module.fail_json(msg="'push_args['dest']' is required when pushing images that do not have the remote registry in the image name")
-
-        # If the push destination contains the image name and/or the tag
-        # remove it and warn since it's not needed.
-        elif regexp.search(dest):
-            dest = regexp.sub('', dest)
-            self.module.warn("Image name and tag are automatically added to push_args['dest']. Destination changed to {dest}".format(dest=dest))
-
-        if dest and dest.endswith('/'):
-            dest = dest[:-1]
-
         transport = self.push_args.get('transport')
+
+        if dest is None:
+            dest = self.image_name
+
         if transport:
-            if not dest:
-                self.module.fail_json("'push_args['transport'] requires 'push_args['dest'] but it was not provided.")
             if transport == 'docker':
                 dest_format_string = '{transport}://{dest}'
             elif transport == 'ostree':
                 dest_format_string = '{transport}:{name}@{dest}'
             else:
                 dest_format_string = '{transport}:{dest}'
+                if transport == 'docker-daemon' and ":" not in dest:
+                    dest_format_string = '{transport}:{dest}:latest'
+            dest_string = dest_format_string.format(transport=transport, name=self.name, dest=dest)
+        else:
+            dest_string = dest
+            # In case of dest as a repository with org name only, append image name to it
+            if ":" not in dest and "@" not in dest and len(dest.rstrip("/").split("/")) == 2:
+                dest_string = dest.rstrip("/") + "/" + self.image_name
 
-        dest_string = dest_format_string.format(transport=transport, name=self.name, dest=dest, image_name=self.image_name,)
+        if "/" not in dest_string and "@" not in dest_string and "docker-daemon" not in dest_string:
+            self.module.fail_json(msg="Destination must be a full URL or path to a directory.")
 
-        # Only append the destination argument if the image name is not a URL
-        if '/' not in self.name:
-            args.append(dest_string)
+        args.append(dest_string)
+        self.module.log("PODMAN-IMAGE-DEBUG: Pushing image {image_name} to {dest_string}".format(
+            image_name=self.image_name, dest_string=dest_string))
+        self.results['actions'].append(" ".join(args))
+        self.results['changed'] = True
+        out, err = '', ''
+        if not self.module.check_mode:
+            rc, out, err = self._run(args, ignore_errors=True)
+            if rc != 0:
+                self.module.fail_json(msg="Failed to push image {image_name}".format(
+                    image_name=self.image_name),
+                    stdout=out, stderr=err,
+                    actions=self.results['actions'],
+                    podman_actions=self.results['podman_actions'])
 
-        rc, out, err = self._run(args, ignore_errors=True)
-        if rc != 0:
-            self.module.fail_json(msg="Failed to push image {image_name}: {err}".format(image_name=self.image_name, err=err))
-        last_id = self._get_id_from_output(
-            out + err, contains=':', split_on=':')
-
-        return self.inspect_image(last_id), out + err
+        return self.inspect_image(self.image_name), out + err
 
     def remove_image(self, image_name=None):
         if image_name is None:
@@ -773,7 +868,8 @@ class PodmanImageManager(object):
             args.append('--force')
         rc, out, err = self._run(args, ignore_errors=True)
         if rc != 0:
-            self.module.fail_json(msg='Failed to remove image {image_name}. {err}'.format(image_name=image_name, err=err))
+            self.module.fail_json(msg='Failed to remove image {image_name}. {err}'.format(
+                image_name=image_name, err=err))
         return out
 
     def remove_image_id(self, image_id=None):
@@ -807,16 +903,20 @@ def main():
             arch=dict(type='str'),
             tag=dict(type='str', default='latest'),
             pull=dict(type='bool', default=True),
+            pull_extra_args=dict(type='str'),
             push=dict(type='bool', default=False),
             path=dict(type='str'),
             force=dict(type='bool', default=False),
-            state=dict(type='str', default='present', choices=['absent', 'present', 'build']),
+            state=dict(type='str', default='present', choices=['absent', 'present', 'build', 'quadlet']),
             validate_certs=dict(type='bool', aliases=['tlsverify', 'tls_verify']),
             executable=dict(type='str', default='podman'),
             auth_file=dict(type='path', aliases=['authfile']),
             username=dict(type='str'),
             password=dict(type='str', no_log=True),
             ca_cert_dir=dict(type='path'),
+            quadlet_dir=dict(type='path', required=False),
+            quadlet_filename=dict(type='str'),
+            quadlet_options=dict(type='list', elements='str', required=False),
             build=dict(
                 type='dict',
                 aliases=['build_args', 'buildargs'],
@@ -825,6 +925,7 @@ def main():
                     annotation=dict(type='dict'),
                     force_rm=dict(type='bool', default=False),
                     file=dict(type='path'),
+                    container_file=dict(type='str'),
                     format=dict(
                         type='str',
                         choices=['oci', 'docker'],
@@ -846,6 +947,7 @@ def main():
                     remove_signatures=dict(type='bool'),
                     sign_by=dict(type='str'),
                     dest=dict(type='str', aliases=['destination'],),
+                    extra_args=dict(type='str'),
                     transport=dict(
                         type='str',
                         choices=[
@@ -854,6 +956,7 @@ def main():
                             'docker-daemon',
                             'oci-archive',
                             'ostree',
+                            'docker'
                         ]
                     ),
                 ),

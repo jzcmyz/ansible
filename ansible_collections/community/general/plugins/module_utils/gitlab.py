@@ -81,16 +81,23 @@ def find_group(gitlab_instance, identifier):
     return group
 
 
-def ensure_gitlab_package(module):
+def ensure_gitlab_package(module, min_version=None):
     if not HAS_GITLAB_PACKAGE:
         module.fail_json(
             msg=missing_required_lib("python-gitlab", url='https://python-gitlab.readthedocs.io/en/stable/'),
             exception=GITLAB_IMP_ERR
         )
+    gitlab_version = gitlab.__version__
+    if min_version is not None and LooseVersion(gitlab_version) < LooseVersion(min_version):
+        module.fail_json(
+            msg="This module requires python-gitlab Python module >= %s "
+                "(installed version: %s). Please upgrade python-gitlab to version %s or above."
+                % (min_version, gitlab_version, min_version)
+        )
 
 
-def gitlab_authentication(module):
-    ensure_gitlab_package(module)
+def gitlab_authentication(module, min_version=None):
+    ensure_gitlab_package(module, min_version=min_version)
 
     gitlab_url = module.params['api_url']
     validate_certs = module.params['validate_certs']
@@ -108,6 +115,11 @@ def gitlab_authentication(module):
         # Changelog : https://github.com/python-gitlab/python-gitlab/releases/tag/v1.13.0
         # This condition allow to still support older version of the python-gitlab library
         if LooseVersion(gitlab.__version__) < LooseVersion("1.13.0"):
+            module.deprecate(
+                "GitLab basic auth is deprecated and will be removed in next major version, "
+                "using another auth method (API token or OAuth) is strongly recommended.",
+                version='10.0.0',
+                collection_name='community.general')
             gitlab_instance = gitlab.Gitlab(url=gitlab_url, ssl_verify=verify, email=gitlab_user, password=gitlab_password,
                                             private_token=gitlab_token, api_version=4)
         else:

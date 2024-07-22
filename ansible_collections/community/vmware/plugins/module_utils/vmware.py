@@ -39,11 +39,9 @@ try:
     from pyVim import connect
     from pyVmomi import vim, vmodl, VmomiSupport
     HAS_PYVMOMI = True
-    HAS_PYVMOMIJSON = hasattr(VmomiSupport, 'VmomiJSONEncoder')
 except ImportError:
     PYVMOMI_IMP_ERR = traceback.format_exc()
     HAS_PYVMOMI = False
-    HAS_PYVMOMIJSON = False
 
 from ansible.module_utils._text import to_text, to_native
 from ansible.module_utils.six import integer_types, iteritems, string_types, raise_from
@@ -1088,11 +1086,11 @@ def option_diff(options, current_options, truthy_strings_as_bool=True):
     for option_key, option_value in options.items():
         if truthy_strings_as_bool and is_boolean(option_value):
             option_value = VmomiSupport.vmodlTypes['bool'](is_truthy(option_value))
-        elif type(option_value) is int:
+        elif isinstance(option_value, int):
             option_value = VmomiSupport.vmodlTypes['int'](option_value)
-        elif type(option_value) is float:
+        elif isinstance(option_value, float):
             option_value = VmomiSupport.vmodlTypes['float'](option_value)
-        elif type(option_value) is str:
+        elif isinstance(option_value, str):
             option_value = VmomiSupport.vmodlTypes['string'](option_value)
 
         if option_key not in current_options_dict or current_options_dict[option_key] != option_value:
@@ -1972,9 +1970,6 @@ class PyVmomi(object):
         provided then all properties are deeply converted.  The resulting
         JSON is sorted to improve human readability.
 
-        Requires upstream support from pyVmomi > 6.7.1
-        (https://github.com/vmware/pyvmomi/pull/732)
-
         Args:
           - obj (object): vim object
           - properties (list, optional): list of properties following
@@ -1985,9 +1980,6 @@ class PyVmomi(object):
         Return:
           dict
         """
-        if not HAS_PYVMOMIJSON:
-            self.module.fail_json(msg='The installed version of pyvmomi lacks JSON output support; need pyvmomi>6.7.1')
-
         result = dict()
         if properties:
             for prop in properties:

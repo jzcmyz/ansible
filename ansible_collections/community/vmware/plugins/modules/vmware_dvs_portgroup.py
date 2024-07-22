@@ -64,11 +64,12 @@ options:
     state:
         description:
             - Determines if the portgroup should be present or not.
-        required: true
+        required: false
         type: str
         choices:
             - 'present'
             - 'absent'
+        default: 'present'
     vlan_trunk:
         description:
             - Indicates whether this is a VLAN trunk or not.
@@ -734,7 +735,7 @@ class VMwareDvsPortgroup(PyVmomi):
 
         # Check config
         if self.module.params['port_allocation'] != 'elastic' and self.module.params['port_binding'] != 'ephemeral':
-            if self.dvs_portgroup.config.numPorts != self.module.params['num_ports']:
+            if self.module.params['num_ports'] is not None and self.dvs_portgroup.config.numPorts != self.module.params['num_ports']:
                 return 'update'
 
         # Default port config
@@ -893,7 +894,7 @@ def main():
             num_ports=dict(type='int'),
             port_binding=dict(required=True, type='str', choices=['static', 'ephemeral']),
             port_allocation=dict(type='str', choices=['fixed', 'elastic']),
-            state=dict(required=True, choices=['present', 'absent'], type='str'),
+            state=dict(type='str', choices=['present', 'absent'], default='present'),
             vlan_trunk=dict(type='bool', default=False),
             vlan_private=dict(type='bool', default=False),
             network_policy=dict(

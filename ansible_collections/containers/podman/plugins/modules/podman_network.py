@@ -33,6 +33,12 @@ options:
     description:
       - disable dns plugin (default "false")
     type: bool
+  dns:
+    description:
+      - Set network-scoped DNS resolver/nameserver for containers in this network.
+        If not set, the host servers from /etc/resolv.conf is used.
+    type: list
+    elements: str
   driver:
     description:
       - Driver to manage the network (default "bridge")
@@ -61,11 +67,27 @@ options:
     description:
       - Allocate container IP from range
     type: str
+  ipam_driver:
+    description:
+      - Set the ipam driver (IP Address Management Driver) for the network.
+        When unset podman chooses an ipam driver automatically based on the network driver
+    type: str
+    choices:
+      - host-local
+      - dhcp
+      - none
   ipv6:
     description:
       - Enable IPv6 (Dual Stack) networking. You must pass a IPv6 subnet.
         The subnet option must be used with the ipv6 option.
+        Idempotency is not supported because it generates subnets randomly.
     type: bool
+  route:
+    description:
+      - A static route in the format <destination in CIDR notation>,<gateway>,<route metric (optional)>.
+        This route will be added to every container in this network.
+    type: list
+    elements: str
   subnet:
     description:
       - Subnet in CIDR format
@@ -74,6 +96,29 @@ options:
     description:
       - Create a Macvlan connection based on this device
     type: str
+  net_config:
+    description:
+      - List of dictionaries with network configuration.
+        Each dictionary should contain 'subnet' and 'gateway' keys.
+        'ip_range' is optional.
+    type: list
+    elements: dict
+    suboptions:
+      subnet:
+        description:
+          - Subnet in CIDR format
+        type: str
+        required: true
+      gateway:
+        description:
+          - Gateway for the subnet
+        type: str
+        required: true
+      ip_range:
+        description:
+          - Allocate container IP from range
+        type: str
+        required: false
   opt:
     description:
       - Add network options. Currently 'vlan' and 'mtu' are supported.
@@ -127,11 +172,30 @@ options:
     choices:
       - present
       - absent
+      - quadlet
   recreate:
     description:
       - Recreate network even if exists.
     type: bool
     default: false
+  quadlet_dir:
+    description:
+      - Path to the directory to write quadlet file in.
+        By default, it will be set as C(/etc/containers/systemd/) for root user,
+        C(~/.config/containers/systemd/) for non-root users.
+    type: path
+    required: false
+  quadlet_filename:
+    description:
+      - Name of quadlet file to write. By default it takes I(name) value.
+    type: str
+  quadlet_options:
+    description:
+      - Options for the quadlet file. Provide missing in usual network args
+        options as a list of lines to add.
+    type: list
+    elements: str
+    required: false
 """
 
 EXAMPLES = r"""
@@ -148,6 +212,14 @@ EXAMPLES = r"""
     subnet: 192.168.22.0/24
     gateway: 192.168.22.1
   become: true
+
+- name: Create Quadlet file for podman network
+  containers.podman.podman_network:
+    name: podman_network
+    state: quadlet
+    quadlet_options:
+      - IPv6=true
+      - Label="ipv6 network"
 """
 
 RETURN = r"""
@@ -197,7 +269,7 @@ network:
         ]
 """
 
-import json  # noqa: F402
+import json
 try:
     import ipaddress
     HAS_IP_ADDRESS_MODULE = True
@@ -208,6 +280,7 @@ from ansible.module_utils.basic import AnsibleModule  # noqa: F402
 from ansible.module_utils._text import to_bytes, to_native  # noqa: F402
 from ansible_collections.containers.podman.plugins.module_utils.podman.common import LooseVersion
 from ansible_collections.containers.podman.plugins.module_utils.podman.common import lower_keys
+from ansible_collections.containers.podman.plugins.module_utils.podman.quadlet import create_quadlet_state
 
 
 class PodmanNetworkModuleParams:
@@ -269,6 +342,11 @@ class PodmanNetworkModuleParams:
     def addparam_gateway(self, c):
         return c + ['--gateway', self.params['gateway']]
 
+    def addparam_dns(self, c):
+        for dns in self.params['dns']:
+            c += ['--dns', dns]
+        return c
+
     def addparam_driver(self, c):
         return c + ['--driver', self.params['driver']]
 
@@ -284,6 +362,13 @@ class PodmanNetworkModuleParams:
     def addparam_macvlan(self, c):
         return c + ['--macvlan', self.params['macvlan']]
 
+    def addparam_net_config(self, c):
+        for net in self.params['net_config']:
+            for kw in ('subnet', 'gateway', 'ip_range'):
+                if kw in net and net[kw]:
+                    c += ['--%s=%s' % (kw.replace('_', '-'), net[kw])]
+        return c
+
     def addparam_interface_name(self, c):
         return c + ['--interface-name', self.params['interface_name']]
 
@@ -298,6 +383,14 @@ class PodmanNetworkModuleParams:
                                  for k in opt])]
         return c
 
+    def addparam_route(self, c):
+        for route in self.params['route']:
+            c += ['--route', route]
+        return c
+
+    def addparam_ipam_driver(self, c):
+        return c + ['--ipam-driver=%s' % self.params['ipam_driver']]
+
     def addparam_disable_dns(self, c):
         return c + ['--disable-dns=%s' % self.params['disable_dns']]
 
@@ -309,7 +402,6 @@ class PodmanNetworkDefaults:
         self.defaults = {
             'driver': 'bridge',
             'internal': False,
-            'ipv6': False
         }
 
     def default_dict(self):
@@ -357,32 +449,45 @@ class PodmanNetworkDiff:
         before = after = self.params['disable_dns']
         return self._diff_update_and_compare('disable_dns', before, after)
 
+    def diffparam_dns(self):
+        before = self.info.get('network_dns_servers', [])
+        after = self.params['dns'] or []
+        return self._diff_update_and_compare('dns', sorted(before), sorted(after))
+
     def diffparam_driver(self):
         # Currently only bridge is supported
         before = after = 'bridge'
         return self._diff_update_and_compare('driver', before, after)
 
     def diffparam_ipv6(self):
-        if LooseVersion(self.version) >= LooseVersion('4.0.0'):
-            before = self.info.get('ipv6_enabled', False)
-            after = self.params['ipv6']
-            return self._diff_update_and_compare('ipv6', before, after)
-        before = after = ''
-        return self._diff_update_and_compare('ipv6', before, after)
+        # We don't support dual stack because it generates subnets randomly
+        return self._diff_update_and_compare('ipv6', '', '')
 
     def diffparam_gateway(self):
         # Disable idempotency of subnet for v4, subnets are added automatically
         # TODO(sshnaidm): check if it's still the issue in v5
-        if LooseVersion(self.version) >= LooseVersion('4.0.0'):
-            return self._diff_update_and_compare('gateway', '', '')
-        try:
-            before = self.info['plugins'][0]['ipam']['ranges'][0][0]['gateway']
-        except (IndexError, KeyError):
-            before = ''
-        after = before
-        if self.params['gateway'] is not None:
+        if LooseVersion(self.version) < LooseVersion('4.0.0'):
+            try:
+                before = self.info['plugins'][0]['ipam']['ranges'][0][0]['gateway']
+            except (IndexError, KeyError):
+                before = ''
+            after = before
+            if self.params['gateway'] is not None:
+                after = self.params['gateway']
+            return self._diff_update_and_compare('gateway', before, after)
+        else:
+            before_subs = self.info.get('subnets')
             after = self.params['gateway']
-        return self._diff_update_and_compare('gateway', before, after)
+            if not before_subs:
+                before = None
+            if before_subs:
+                if len(before_subs) > 1 and after:
+                    return self._diff_update_and_compare(
+                        'gateway', ",".join([i['gateway'] for i in before_subs]), after)
+                before = [i.get('gateway') for i in before_subs][0]
+            if not after:
+                after = before
+            return self._diff_update_and_compare('gateway', before, after)
 
     def diffparam_internal(self):
         if LooseVersion(self.version) >= LooseVersion('4.0.0'):
@@ -401,21 +506,62 @@ class PodmanNetworkDiff:
         before = after = ''
         return self._diff_update_and_compare('ip_range', before, after)
 
-    def diffparam_subnet(self):
-        # Disable idempotency of subnet for v4, subnets are added automatically
-        # TODO(sshnaidm): check if it's still the issue in v5
-        if LooseVersion(self.version) >= LooseVersion('4.0.0'):
-            return self._diff_update_and_compare('subnet', '', '')
-        try:
-            before = self.info['plugins'][0]['ipam']['ranges'][0][0]['subnet']
-        except (IndexError, KeyError):
+    def diffparam_ipam_driver(self):
+        before = self.info.get("ipam_options", {}).get("driver", "")
+        after = self.params['ipam_driver']
+        if not after:
+            after = before
+        return self._diff_update_and_compare('ipam_driver', before, after)
+
+    def diffparam_net_config(self):
+        after = self.params['net_config']
+        if not after:
+            return self._diff_update_and_compare('net_config', '', '')
+        before_subs = self.info.get('subnets', [])
+        if before_subs:
+            before = ":".join(sorted([",".join([i['subnet'], i['gateway']]).rstrip(",") for i in before_subs]))
+        else:
             before = ''
-        after = before
-        if self.params['subnet'] is not None:
+        after = ":".join(sorted([",".join([i['subnet'], i['gateway']]).rstrip(",") for i in after]))
+        return self._diff_update_and_compare('net_config', before, after)
+
+    def diffparam_route(self):
+        routes = self.info.get('routes', [])
+        if routes:
+            before = [",".join([
+                r['destination'], r['gateway'], str(r.get('metric', ''))]).rstrip(",") for r in routes]
+        else:
+            before = []
+        after = self.params['route'] or []
+        return self._diff_update_and_compare('route', sorted(before), sorted(after))
+
+    def diffparam_subnet(self):
+        # Disable idempotency of subnet for v3 and below
+        if LooseVersion(self.version) < LooseVersion('4.0.0'):
+            try:
+                before = self.info['plugins'][0]['ipam']['ranges'][0][0]['subnet']
+            except (IndexError, KeyError):
+                before = ''
+            after = before
+            if self.params['subnet'] is not None:
+                after = self.params['subnet']
+                if HAS_IP_ADDRESS_MODULE:
+                    after = ipaddress.ip_network(after).compressed
+            return self._diff_update_and_compare('subnet', before, after)
+        else:
+            if self.params['ipv6'] is not None:
+                # We can't support dual stack, it generates subnets randomly
+                return self._diff_update_and_compare('subnet', '', '')
             after = self.params['subnet']
-            if HAS_IP_ADDRESS_MODULE:
-                after = ipaddress.ip_network(after).compressed
-        return self._diff_update_and_compare('subnet', before, after)
+            if after is None:
+                # We can't guess what subnet was used before by default
+                return self._diff_update_and_compare('subnet', '', '')
+            before = self.info.get('subnets')
+            if before:
+                if len(before) > 1 and after:
+                    return self._diff_update_and_compare('subnet', ",".join([i['subnet'] for i in before]), after)
+                before = [i['subnet'] for i in before][0]
+            return self._diff_update_and_compare('subnet', before, after)
 
     def diffparam_macvlan(self):
         before = after = ''
@@ -620,6 +766,7 @@ class PodmanNetworkManager:
         states_map = {
             'present': self.make_present,
             'absent': self.make_absent,
+            'quadlet': self.make_quadlet,
         }
         process_action = states_map[self.state]
         process_action()
@@ -652,20 +799,28 @@ class PodmanNetworkManager:
                              'podman_actions': self.network.actions})
         self.module.exit_json(**self.results)
 
+    def make_quadlet(self):
+        results_update = create_quadlet_state(self.module, "network")
+        self.results.update(results_update)
+        self.module.exit_json(**self.results)
+
 
 def main():
     module = AnsibleModule(
         argument_spec=dict(
             state=dict(type='str', default="present",
-                       choices=['present', 'absent']),
+                       choices=['present', 'absent', 'quadlet']),
             name=dict(type='str', required=True),
             disable_dns=dict(type='bool', required=False),
+            dns=dict(type='list', elements='str', required=False),
             driver=dict(type='str', required=False),
             force=dict(type='bool', default=False),
             gateway=dict(type='str', required=False),
             interface_name=dict(type='str', required=False),
             internal=dict(type='bool', required=False),
             ip_range=dict(type='str', required=False),
+            ipam_driver=dict(type='str', required=False,
+                             choices=['host-local', 'dhcp', 'none']),
             ipv6=dict(type='bool', required=False),
             subnet=dict(type='str', required=False),
             macvlan=dict(type='str', required=False),
@@ -681,11 +836,23 @@ def main():
             executable=dict(type='str', required=False, default='podman'),
             debug=dict(type='bool', default=False),
             recreate=dict(type='bool', default=False),
+            route=dict(type='list', elements='str', required=False),
+            quadlet_dir=dict(type='path', required=False),
+            quadlet_filename=dict(type='str', required=False),
+            quadlet_options=dict(type='list', elements='str', required=False),
+            net_config=dict(type='list', required=False, elements='dict',
+                            options=dict(
+                                subnet=dict(type='str', required=True),
+                                gateway=dict(type='str', required=True),
+                                ip_range=dict(type='str', required=False),
+                            )),
         ),
         required_by=dict(  # for IP range and GW to set 'subnet' is required
             ip_range=('subnet'),
             gateway=('subnet'),
-        ))
+        ),
+        # define or subnet or net config
+        mutually_exclusive=[['subnet', 'net_config']])
 
     PodmanNetworkManager(module).execute()
 

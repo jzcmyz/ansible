@@ -30,6 +30,7 @@ options:
       - stopped
       - paused
       - unpaused
+      - quadlet
   recreate:
     description:
       - Use with present and started states to force the re-creation of an
@@ -116,6 +117,8 @@ options:
       all containers in the pod.
     type: list
     elements: str
+    aliases:
+      - dns_option
     required: false
   dns_search:
     description:
@@ -123,6 +126,14 @@ options:
       between all containers in the pod.
     type: list
     elements: str
+    required: false
+  exit_policy:
+    description:
+      - Set the exit policy of the pod when the last container exits. Supported policies are stop and continue
+    choices:
+      - stop
+      - continue
+    type: str
     required: false
   generate_systemd:
     description:
@@ -226,6 +237,11 @@ options:
     elements: str
     required: false
     type: list
+  gpus:
+    description:
+    - GPU devices to add to the container ('all' to pass all GPUs).
+    type: str
+    required: false
   hostname:
     description:
     - Set a hostname to the pod
@@ -263,6 +279,11 @@ options:
   ip:
     description:
     - Set a static IP for the pod's shared network.
+    type: str
+    required: false
+  ip6:
+    description:
+    - Set a static IPv6 for the pod's shared network.
     type: str
     required: false
   label:
@@ -340,11 +361,61 @@ options:
     required: false
     aliases:
       - ports
+  quadlet_dir:
+    description:
+      - Path to the directory to write quadlet file in.
+        By default, it will be set as C(/etc/containers/systemd/) for root user,
+        C(~/.config/containers/systemd/) for non-root users.
+    type: path
+  quadlet_filename:
+    description:
+      - Name of quadlet file to write. By default it takes I(name) value.
+    type: str
+  quadlet_options:
+    description:
+      - Options for the quadlet file. Provide missing in usual container args
+        options as a list of lines to add.
+    type: list
+    elements: str
+  restart_policy:
+    description:
+      - Restart policy to follow when containers exit.
+    type: str
+  security_opt:
+    description:
+    - Security options for the pod.
+    type: list
+    elements: str
+    required: false
   share:
     description:
     - A comma delimited list of kernel namespaces to share. If none or "" is specified,
       no namespaces will be shared. The namespaces to choose from are ipc, net, pid,
       user, uts.
+    type: str
+    required: false
+  share_parent:
+    description:
+    - This boolean determines whether or not all containers entering the pod use the pod as their cgroup parent.
+      The default value of this option in Podman is true.
+    type: bool
+    required: false
+  shm_size:
+    description:
+    - Set the size of the /dev/shm shared memory space.
+      A unit can be b (bytes), k (kibibytes), m (mebibytes), or g (gibibytes).
+      If the unit is omitted, the system uses bytes.
+      If the size is omitted, the default is 64m.
+      When size is 0, there is no limit on the amount of memory used for IPC by the pod.
+    type: str
+    required: false
+  shm_size_systemd:
+    description:
+    - Size of systemd-specific tmpfs mounts such as /run, /run/lock, /var/log/journal and /tmp.
+      A unit can be b (bytes), k (kibibytes), m (mebibytes), or g (gibibytes).
+      If the unit is omitted, the system uses bytes.
+      If the size is omitted, the default is 64m.
+      When size is 0, the usage is limited to 50 percents of the host's available memory.
     type: str
     required: false
   subgidname:
@@ -360,6 +431,11 @@ options:
       This flag conflicts with `userns` and `uidmap`.
     required: false
     type: str
+  sysctl:
+    description:
+    - Set kernel parameters for the pod.
+    type: dict
+    required: false
   uidmap:
     description:
     - Run the container in a new user namespace using the supplied mapping.
@@ -376,11 +452,22 @@ options:
       An empty value ("") means user namespaces are disabled.
     required: false
     type: str
+  uts:
+    description:
+    - Set the UTS namespace mode for the pod.
+    required: false
+    type: str
   volume:
     description:
     - Create a bind mount.
     aliases:
     - volumes
+    elements: str
+    required: false
+    type: list
+  volumes_from:
+    description:
+    - Mount volumes from the specified container.
     elements: str
     required: false
     type: list
@@ -433,9 +520,9 @@ pod:
 
 '''
 
-EXAMPLES = '''
+EXAMPLES = r'''
 # What modules does for example
-- podman_pod:
+- containers.podman.podman_pod:
     name: pod1
     state: started
     ports:
@@ -447,6 +534,72 @@ EXAMPLES = '''
     name: pod2
     state: started
     publish: "127.0.0.1::80"
+
+# Full workflow example with pod and containers
+- name: Create a pod with parameters
+  containers.podman.podman_pod:
+    name: mypod
+    state: created
+    network: host
+    share: net
+    userns: auto
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
+    hostname: mypod
+    dns:
+      - 1.1.1.1
+    volumes:
+      - /tmp:/tmp/:ro
+    label:
+      key: cval
+      otherkey: kddkdk
+      somekey: someval
+    add_host:
+      - "google:5.5.5.5"
+
+- name: Create containers attached to the pod
+  containers.podman.podman_container:
+    name: "{{ item }}"
+    state: created
+    pod: mypod
+    image: alpine
+    command: sleep 1h
+    loop:
+      - "container1"
+      - "container2"
+
+- name: Start pod
+  containers.podman.podman_pod:
+    name: mypod
+    state: started
+    network: host
+    share: net
+    userns: auto
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
+    hostname: mypod
+    dns:
+      - 1.1.1.1
+    volumes:
+      - /tmp:/tmp/:ro
+    label:
+      key: cval
+      otherkey: kddkdk
+      somekey: someval
+    add_host:
+      - "google:5.5.5.5"
+
+# Create a Quadlet file for a pod
+- containers.podman.podman_pod:
+    name: qpod
+    state: quadlet
+    ports:
+      - "4444:5555"
+    volume:
+      - /var/run/docker.sock:/var/run/docker.sock
+    quadlet_dir: /custom/dir
 '''
 from ansible.module_utils.basic import AnsibleModule  # noqa: F402
 from ..module_utils.podman.podman_pod_lib import PodmanPodManager  # noqa: F402
@@ -454,9 +607,7 @@ from ..module_utils.podman.podman_pod_lib import ARGUMENTS_SPEC_POD  # noqa: F40
 
 
 def main():
-    module = AnsibleModule(
-        argument_spec=ARGUMENTS_SPEC_POD
-    )
+    module = AnsibleModule(argument_spec=ARGUMENTS_SPEC_POD)
     results = PodmanPodManager(module, module.params).execute()
     module.exit_json(**results)
 

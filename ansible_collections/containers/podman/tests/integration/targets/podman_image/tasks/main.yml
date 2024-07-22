@@ -209,14 +209,33 @@
       register: oci_build3
       ignore_errors: true
 
-    - name: Build OCI image, point to location of Containerfile
+    - name: Build OCI image, point to location of Containerfile without path
       containers.podman.podman_image:
         executable: "{{ test_executable | default('podman') }}"
         name: testimage2
-        path: /var/tmp/build/subdir
+        state: build
         build:
           file: /var/tmp/build/Dockerfile
       register: oci_build4
+
+    - name: Build OCI image, point to location of Containerfile and path
+      containers.podman.podman_image:
+        executable: "{{ test_executable | default('podman') }}"
+        name: testimage3
+        path: /var/tmp/build
+        build:
+          file: /var/tmp/build/Dockerfile
+      register: oci_build5
+
+    - name: Build OCI image with no Containerfile and path
+      containers.podman.podman_image:
+        executable: "{{ test_executable | default('podman') }}"
+        name: testimage5x
+        state: build
+        build:
+          format: oci
+      register: oci_build6
+      ignore_errors: true
 
     - name: Inspect first image
       containers.podman.podman_image_info:
@@ -237,7 +256,9 @@
           - oci_build2 is not changed
           - oci_build3 is not changed
           - oci_build3 is failed
-          - oci_build4 is changed
+          - oci_build4 is success
+          - oci_build5 is success
+          - oci_build6 is failed
           - "'localhost/testimage:latest' in testimage_info.images[0]['RepoTags'][0]"
           - "'localhost/testimage2:latest' in testimage2_info.images[0]['RepoTags'][0]"
           - "'no such file or directory' in oci_build3.msg"
@@ -329,6 +350,200 @@
           - item.Architecture == "arm"
       loop: "{{ imageinfo_arch.images }}"
 
+    - name: Build Docker image
+      containers.podman.podman_image:
+        executable: "{{ test_executable | default('podman') }}"
+        name: quay.io/testing/testimage
+        path: /var/tmp/build
+      register: build_image1
+
+    - name: Build Docker image - 2
+      containers.podman.podman_image:
+        executable: "{{ test_executable | default('podman') }}"
+        name: quay.io/testing/testimage:draft
+        path: /var/tmp/build
+
+    - name: Build Docker image
+      containers.podman.podman_image:
+        executable: "{{ test_executable | default('podman') }}"
+        name: testimage2:testtag
+        path: /var/tmp/build
+      register: build_image2
+
+    - name: Build image from a given Containerfile
+      containers.podman.podman_image:
+        executable: "{{ test_executable | default('podman') }}"
+        name: testimage2:customfile
+        path: "{{ playbook_dir }}"
+        build:
+          container_file: |-
+            FROM quay.io/coreos/alpine-sh
+            RUN echo "Hello World" > /tmp/hello.txt
+      register: build_custom1
+
+    - name: Build image from a given Containerfile w/o path
+      containers.podman.podman_image:
+        executable: "{{ test_executable | default('podman') }}"
+        name: testimage2:customfile2
+        state: build
+        build:
+          container_file: |-
+            FROM quay.io/coreos/alpine-sh
+            RUN echo "Hello2 World" > /tmp/hello2.txt
+        force: true
+      register: build_custom2
+
+    - name: Build image from a given Containerfile and file (fail)
+      containers.podman.podman_image:
+        executable: "{{ test_executable | default('podman') }}"
+        name: testimage2:failme
+        state: build
+        build:
+          container_file: |-
+            FROM quay.io/coreos/alpine-sh
+            RUN echo "Hello2 World" > /tmp/hello2.txt
+          file: /var/tmp/build/Dockerfile
+        force: true
+      register: fail_custom_image
+      ignore_errors: true
+
+    - name: Check if image was built properly
+      assert:
+        that:
+          - build_custom1 is changed
+          - build_custom2 is changed
+          - fail_custom_image is failed
+
+    - include_tasks: idem_push.yml
+
+    - name: Create a Quadlet for image with filename
+      containers.podman.podman_image:
+        executable: "{{ test_executable | default('podman') }}"
+        name: quay.io/coreos/coreos-installer:latest
+        state: quadlet
+        arch: x86_64
+        quadlet_dir: /tmp
+        quadlet_filename: customfile
+
+    - name: Check if files exists
+      stat:
+        path: /tmp/customfile.image
+      register: quadlet_file_custom
+
+    - name: Fail if no file is present
+      assert:
+        that:
+          - quadlet_file_custom.stat.exists
+
+    - name: Create quadlet image file
+      containers.podman.podman_image:
+        executable: "{{ test_executable | default('podman') }}"
+        name: quay.io/coreos/coreos-installer:latest
+        state: quadlet
+        arch: x86_64
+        ca_cert_dir: /etc/docker/certs.d
+        username: user
+        password: pass
+        validate_certs: false
+        quadlet_dir: /tmp/
+        quadlet_options:
+          - "ImageTag=quay.io/coreos/coreos-installer:12345"
+          - "AllTags=true"
+          - |-
+            [Install]
+            WantedBy=default.target
+
+    - name: Check if files exists
+      stat:
+        path: /tmp/coreos-installer.image
+      register: quadlet_file
+
+    - name: Check output is correct for Quadlet image in /tmp/coreos-installer.image file
+      assert:
+        that:
+          - quadlet_file.stat.exists
+
+    - name: Check for the existence of lines in /tmp/coreos-installer.image
+      lineinfile:
+        path: /tmp/coreos-installer.image
+        line: "{{ item }}"
+        state: present
+      check_mode: yes
+      register: line_check
+      loop:
+        - "[Image]"
+        - "Image=quay.io/coreos/coreos-installer:latest"
+        - "ImageTag=quay.io/coreos/coreos-installer:12345"
+        - "AllTags=true"
+        - "WantedBy=default.target"
+        - "Arch=x86_64"
+        - "CertDir=/etc/docker/certs.d"
+        - "Creds=user:pass"
+        - "TLSVerify=false"
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Fail the task if any line is not present
+      fail:
+        msg: "The following line is not present in /tmp/coreos-installer.image: {{ item.item }}"
+      when: item.changed
+      loop: "{{ line_check.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Create quadlet image file - same
+      containers.podman.podman_image:
+        executable: "{{ test_executable | default('podman') }}"
+        name: quay.io/coreos/coreos-installer:latest
+        state: quadlet
+        arch: x86_64
+        ca_cert_dir: /etc/docker/certs.d
+        username: user
+        password: pass
+        validate_certs: false
+        quadlet_dir: /tmp
+        quadlet_options:
+          - "ImageTag=quay.io/coreos/coreos-installer:12345"
+          - "AllTags=true"
+          - |-
+            [Install]
+            WantedBy=default.target
+      register: quad2
+
+    - name: Check if quadlet changed
+      assert:
+        that:
+          - quad2 is not changed
+
+    - name: Create quadlet image file - different
+      containers.podman.podman_image:
+        executable: "{{ test_executable | default('podman') }}"
+        name: quay.io/coreos/coreos-installer:latest
+        state: quadlet
+        arch: arm64
+        ca_cert_dir: /etc/docker/certs.d
+        username: user
+        password: pass
+        validate_certs: false
+        quadlet_dir: /tmp/
+        quadlet_options:
+          - "ImageTag=quay.io/coreos/coreos-installer:12345"
+          - "AllTags=true"
+          - |-
+            [Install]
+            WantedBy=default.target
+      register: quad3
+
+    - name: Print diff
+      debug:
+        var: quad3.diff
+
+    - name: Check if changed and diff
+      assert:
+        that:
+          - quad3 is changed
+          - "'arm64' in quad3.diff.after"
+
   always:
     - name: Cleanup images
       containers.podman.podman_image:
@@ -341,4 +556,12 @@
         - quay.io/coreos/etcd:v3.3.11
         - localhost/testimage
         - localhost/testimage2
+        - localhost/testimage2:testtag
+        - localhost/testimage3
         - localhost/dockerimage
+        - quay.io/testing/testimage
+        - quay.io/testing/testimage:draft
+        - testimage2:customfile
+        - testimage2:customfile2
+        - testimage2:failme
+        - testimage5x

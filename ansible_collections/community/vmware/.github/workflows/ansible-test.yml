@@ -19,8 +19,8 @@ on:
   push:
     branches:
       - main
-      - stable-2.x
       - stable-3.x
+      - stable-4.x
   pull_request:
   # Run CI once per day (at 07:12 UTC)
   # This ensures that even if there haven't been commits that we are still
@@ -66,6 +66,7 @@ jobs:
           # - stable-2.14
           - stable-2.15
           - stable-2.16
+          - stable-2.17
           # - devel
           - milestone
     # Ansible-test on various stable branches does not yet work well with cgroups v2.
@@ -90,7 +91,8 @@ jobs:
           testing-type: sanity
           # OPTIONAL If your sanity tests require code
           # from other collections, install them like this
-          # test-deps: >-
+          test-deps: >-
+            vmware.vmware
           #   ansible.netcommon
           #   ansible.utils
           # OPTIONAL If set to true, will test only against changed files,
@@ -131,6 +133,7 @@ jobs:
           # - stable-2.14
           - stable-2.15
           - stable-2.16
+          - stable-2.17
           # - devel
           - milestone
 
@@ -149,6 +152,7 @@ jobs:
           test-deps: >-
             ansible.netcommon
             ansible.utils
+            vmware.vmware
           # OPTIONAL If set to true, will test only against changed files,
           # which should improve CI performance. See limitations on
           # https://github.com/ansible-community/ansible-test-gh-action#pull-request-change-detection

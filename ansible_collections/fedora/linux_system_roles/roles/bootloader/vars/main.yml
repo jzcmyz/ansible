@@ -2,6 +2,7 @@
 ---
 # ansible_facts required by the role
 __bootloader_required_facts:
+  - architecture
   - distribution
   - distribution_major_version
   - distribution_version
@@ -16,7 +17,7 @@ __bootloader_default_grub: /etc/default/grub
 __bootloader_uefi_conf_dir: >-
   {%- if ansible_os_family == 'RedHat' -%}
   /boot/efi/EFI/{{ ansible_distribution | lower }}/
-  {%- elif ansible_os_family == Suse -%}
+  {%- elif ansible_os_family == 'Suse' -%}
   /boot/efi/EFI/BOOT/
   {%- endif -%}
 __bootloader_bios_conf_dir: /boot/grub2/

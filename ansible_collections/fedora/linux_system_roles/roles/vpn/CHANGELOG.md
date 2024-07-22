@@ -1,6 +1,27 @@
 Changelog
 =========
 
+[1.6.6] - 2024-07-02
+--------------------
+
+### Bug Fixes
+
+- fix: add support for EL10 (#160)
+
+### Other Changes
+
+- test: stop firewall after tests that use firewall (#158)
+- ci: ansible-lint action now requires absolute directory (#159)
+
+[1.6.5] - 2024-06-11
+--------------------
+
+### Other Changes
+
+- ci: use tox-lsr 3.3.0 which uses ansible-test 2.17 (#153)
+- ci: tox-lsr 3.4.0 - fix py27 tests; move other checks to py310 (#155)
+- ci: Add supported_ansible_also to .ansible-lint (#156)
+
 [1.6.4] - 2024-04-04
 --------------------
 

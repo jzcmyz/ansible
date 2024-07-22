@@ -5,6 +5,145 @@ Ansible Podman modules and plugins Release Notes
 .. contents:: Topics
 
 
+v1.15.4
+=======
+
+Release Summary
+---------------
+
+Bugfixes
+
+Bugfixes
+--------
+
+- Fix missing entries in network quadlet generated file
+- Fix quadlet parameters for restart policy
+- Idempotency improvements
+
+v1.15.3
+=======
+
+Release Summary
+---------------
+
+Bugfixes
+
+Minor Changes
+-------------
+
+- CI Update python for latest Ansible to 3.11 in CI
+
+Bugfixes
+--------
+
+- Fix idempotency for empty values
+- params gpus should be exit_policy
+
+v1.15.2
+=======
+
+Release Summary
+---------------
+
+Inline Containerfile option for podman_image
+
+Minor Changes
+-------------
+
+- Add option for inline Containerfile in podman_image
+
+v1.15.1
+=======
+
+Release Summary
+---------------
+
+Bugfixes for systemd generation
+
+Bugfixes
+--------
+
+- Fix idempotency for pods in case of systemd generation
+- Fix idempotency for systemd generations
+
+v1.15.0
+=======
+
+Release Summary
+---------------
+
+Podman search module and bugfixes for Podman image
+
+Major Changes
+-------------
+
+- Add podman search
+
+Bugfixes
+--------
+
+- Fix issue with pushing podman image to repo name and org
+
+New Modules
+-----------
+
+- containers.podman.podman_search - Search for remote images using podman
+
+v1.14.0
+=======
+
+Release Summary
+---------------
+
+Idempotency redesign and a lot of new options
+
+Major Changes
+-------------
+
+- Add mount and unmount for volumes
+- Add multiple subnets for networks
+- Add new options for podman_container
+- Add new options to pod module
+- Improve idempotency for networking in podman_container
+- Redesign idempotency for Podman Pod module
+
+Minor Changes
+-------------
+
+- Add autodiscovery for build context in podman_image
+- Add docs, tests and more examples for podman_pod
+- Add extra_args for podman_image push and pull
+- Add idempotency for mounts and volumes in podman_container
+- Add new functionality tests for podman_secret
+- Add path and env options for podman_secret
+- Add route, dns and ipam_driver to podman_network
+- Create podman secret when skip_existing=True and it does not exist
+
+Bugfixes
+--------
+
+- Fix idempotency for pod with 0.0.0.0
+- Fix transports issues in podman_image
+- fix(#747) set correct HealthCmd
+
+v1.13.0
+=======
+
+Release Summary
+---------------
+
+Quadlet support for Podman
+
+Major Changes
+-------------
+
+- Add quadlet support for Podman modules
+
+Bugfixes
+--------
+
+- Fix pod info for non-existant pods
+
 v1.12.1
 =======
 

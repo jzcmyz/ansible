@@ -16,7 +16,6 @@ module: vmware_datastore_info
 short_description: Gather info about datastores available in given vCenter
 description:
     - This module can be used to gather information about datastores in VMWare infrastructure.
-    - All values and VMware object names are case sensitive.
 author:
     - Tim Rightnour (@garbled1)
 options:
@@ -59,7 +58,6 @@ options:
      - Specify the output schema desired.
      - The 'summary' output schema is the legacy output from the module
      - The 'vsphere' output schema is the vSphere API class definition
-       which requires pyvmomi>6.7.1
      choices: ['summary', 'vsphere']
      default: 'summary'
      type: str

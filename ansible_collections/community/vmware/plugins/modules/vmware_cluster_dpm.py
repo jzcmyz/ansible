@@ -17,7 +17,6 @@ module: vmware_cluster_dpm
 short_description: Manage Distributed Power Management (DPM) on VMware vSphere clusters
 description:
     - Manages DPM on VMware vSphere clusters.
-    - All values and VMware object names are case sensitive.
 author:
 - Olivia Luetolf (@olilu)
 options:
@@ -118,7 +117,7 @@ class VMwareCluster(PyVmomi):
         change_message = None
         changes = False
 
-        if dpm_config.enabled != self.enable_dpm:
+        if dpm_config is None or dpm_config.enabled != self.enable_dpm:
             change_message = 'DPM enabled status changes'
             changes = True
             return changes, change_message

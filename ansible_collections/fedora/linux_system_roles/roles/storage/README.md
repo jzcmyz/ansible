@@ -48,6 +48,11 @@ keys:
   This specifies the type of pool to manage.
   Valid values for `type`: `lvm`.
 
+- `grow_to_fill`
+
+  When set, the pool Physical Volumes will be resized to match their respective device sizes.
+  (e.g. after Virtual Machine disk size increase)
+
 - `shared`
 
   If set to `true`, the role creates or manages a shared volume group. Requires lvmlockd and
@@ -111,6 +116,21 @@ keys:
 - `encryption_luks_version`
 
   This integer specifies the LUKS version to use.
+
+- `encryption_clevis_pin`
+
+  For Stratis pools, the clevis method that should be used to encrypt the created pool.
+  Accepted values are: `tang` and `tpm2`
+
+- `encryption_tang_url`
+
+  When creating a Stratis pool encrypted via NBDE using a tang server,
+  specifies the URL of the server.
+
+- `encryption_tang_thumbprint`
+
+  When creating a Stratis pool encrypted via NBDE using a tang server,
+  specifies the thumbprint of the server.
 
 ### `storage_volumes`
 

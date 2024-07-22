@@ -1,6 +1,42 @@
 Changelog
 =========
 
+[1.0.7] - 2024-07-02
+--------------------
+
+### Bug Fixes
+
+- fix: add support for EL10 (#109)
+
+### Other Changes
+
+- test: Skip hosts on s390x. Asserting error doesn't work due to a bug (#107)
+- ci: ansible-lint action now requires absolute directory (#108)
+
+[1.0.6] - 2024-06-11
+--------------------
+
+### Bug Fixes
+
+- fix: Set user.cfg path to /boot/grub2/ on EL 9 UEFI (#101)
+
+### Other Changes
+
+- ci: use tox-lsr 3.3.0 which uses ansible-test 2.17 (#102)
+- ci: tox-lsr 3.4.0 - fix py27 tests; move other checks to py310 (#104)
+- ci: Add supported_ansible_also to .ansible-lint (#105)
+
+[1.0.5] - 2024-04-22
+--------------------
+
+### Bug Fixes
+
+- fix: Fail on the s390x architecture with a not supported msg (#96)
+
+### Other Changes
+
+- refactor: Refactor bootloader_settings to run cmds from functions, use mock in unittests (#97)
+
 [1.0.4] - 2024-04-04
 --------------------
 

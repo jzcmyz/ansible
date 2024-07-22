@@ -1,6 +1,28 @@
 Changelog
 =========
 
+[1.5.8] - 2024-07-02
+--------------------
+
+### Bug Fixes
+
+- fix: wildcard package installation not working with dnf module (#161)
+- fix: add support for EL10 (#163)
+
+### Other Changes
+
+- test: find cockpit test group dynamically (#160)
+- ci: ansible-lint action now requires absolute directory (#162)
+
+[1.5.7] - 2024-06-11
+--------------------
+
+### Other Changes
+
+- ci: use tox-lsr 3.3.0 which uses ansible-test 2.17 (#155)
+- ci: tox-lsr 3.4.0 - fix py27 tests; move other checks to py310 (#157)
+- ci: Add supported_ansible_also to .ansible-lint (#158)
+
 [1.5.6] - 2024-04-04
 --------------------
 

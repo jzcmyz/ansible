@@ -1,6 +1,41 @@
 Changelog
 =========
 
+[1.12.9] - 2024-07-02
+--------------------
+
+### Bug Fixes
+
+- fix: add support for EL10 (#395)
+
+### Other Changes
+
+- ci: ansible-lint action now requires absolute directory (#394)
+
+[1.12.8] - 2024-06-11
+--------------------
+
+### Bug Fixes
+
+- fix: Add check for "rsyslogd: error" in /var/log/messages in all tests (#388)
+
+### Other Changes
+
+- ci: use tox-lsr 3.3.0 which uses ansible-test 2.17 (#389)
+- ci: tox-lsr 3.4.0 - fix py27 tests; move other checks to py310 (#391)
+- ci: Add supported_ansible_also to .ansible-lint (#392)
+
+[1.12.7] - 2024-05-21
+--------------------
+
+### Bug Fixes
+
+- fix: Remove name="basics_imuxsock" parameter from imuxsock type input (#385)
+
+### Other Changes
+
+- tests: Fail when rsyslog errors in __default_system_log (#386)
+
 [1.12.6] - 2024-04-04
 --------------------
 

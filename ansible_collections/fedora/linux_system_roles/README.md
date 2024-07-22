@@ -68,6 +68,7 @@ The modules and other plugins in this collection are private, used only internal
   * crypto_policies
   * fapolicyd
   * firewall
+  * gfs2
   * ha_cluster
   * journald
   * kdump
@@ -86,6 +87,7 @@ The modules and other plugins in this collection are private, used only internal
   * ssh
   * sshd
   * storage
+  * sudo
   * systemd
   * timesync
   * tlog
@@ -96,13 +98,13 @@ The modules and other plugins in this collection are private, used only internal
 
 <!--ts-->
   * private_logging_subrole_rsyslog
-  * private_metrics_subrole_postfix
-  * private_metrics_subrole_mssql
-  * private_metrics_subrole_spark
-  * private_metrics_subrole_bpftrace
   * private_metrics_subrole_elasticsearch
-  * private_metrics_subrole_pcp
-  * private_metrics_subrole_repository
-  * private_metrics_subrole_grafana
+  * private_metrics_subrole_spark
   * private_metrics_subrole_redis
+  * private_metrics_subrole_bpftrace
+  * private_metrics_subrole_postfix
+  * private_metrics_subrole_grafana
+  * private_metrics_subrole_pcp
+  * private_metrics_subrole_mssql
+  * private_metrics_subrole_repository
 <!--te-->
