@@ -1,0 +1,8 @@
+---
+- name: Configure sshd
+  hosts: redhat
+  vars:
+    sshd:
+      PermitRootLogin: yes
+  roles:
+    - fedora.linux_system_roles.sshd

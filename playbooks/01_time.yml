@@ -1,0 +1,8 @@
+---
+- name: Manage time synchronization
+  hosts: redhat
+  vars:
+    timesync_ntp_servers:
+      - hostname: 192.168.1.254
+  roles:
+    - fedora.linux_system_roles.timesync

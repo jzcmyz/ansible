@@ -1,0 +1,28 @@
+---
+- name: Install patches
+  hosts: redhat
+  tasks:
+    - name: Installing the patches
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest 
+
+    - name: install yum-utils if needed
+      ansible.builtin.dnf:
+        name: yum-utils
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: check if reboot is required
+      ansible.builtin.command: needs-restarting -r
+      register: needs_restarting
+      changed_when: needs_restarting.rc == 1
+      ignore_errors: yes
+
+    - name: Debug
+      ansible.builtin.debug:
+        var: needs_restarting
+
+    - name: do reboot if needed
+      ansible.builtin.reboot:
+      when: needs_restarting.rc == 1
